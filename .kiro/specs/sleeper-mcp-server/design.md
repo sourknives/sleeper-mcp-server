@@ -76,16 +76,31 @@ The server follows a layered architecture:
 - `player_tools.py`: Player search, stats, projections, trending
 - `matchup_tools.py`: Matchup data, scores, historical results
 - `trade_tools.py`: Trade analysis and roster evaluation
+- `commissioner_tools.py`: Commissioner trade evaluation and collusion detection
 
 #### 4. Data Models (`models.py`)
 - Pydantic models for Sleeper API responses
 - Type-safe data structures for internal processing
 - Validation and serialization logic
+- Enhanced trade analysis models for package evaluation
 
 #### 5. Cache Manager (`cache.py`)
 - In-memory caching for frequently accessed data
 - TTL-based expiration for different data types
 - Cache invalidation strategies
+- Extended caching for external ranking data with longer TTL
+
+#### 6. External Data Integration (`external_data.py`)
+- FantasyPros web scraper for consensus rankings from public pages
+- PPR and Half-PPR scoring format support via specific URLs
+- HTML parsing and data extraction logic
+- Ranking data validation and processing
+
+#### 7. Commissioner Trade Evaluator (`utils/commissioner_evaluator.py`)
+- Trade fairness scoring algorithm with weighted factors
+- Collusion detection engine with pattern recognition
+- Historical trade analysis for suspicious behavior detection
+- League context analysis including standings and playoff implications
 
 ### MCP Tools Interface
 
@@ -110,6 +125,16 @@ get_matchup_scores(league_id: str, week: int) -> List[MatchupScore]
 # Trade Tools
 analyze_trade_targets(league_id: str, roster_id: str, position: str) -> TradeAnalysis
 evaluate_roster_needs(league_id: str, roster_id: str) -> RosterAnalysis
+evaluate_trade_package(league_id: str, team_a_roster_id: str, team_a_gives: List[str], 
+                      team_b_roster_id: str, team_b_gives: List[str], scoring_format: str) -> TradePackageAnalysis
+get_current_player_rankings(scoring_format: str, position: Optional[str], season: Optional[str]) -> PlayerRankings
+# Note: scoring_format limited to "ppr" and "half_ppr" only
+
+# Commissioner Tools
+evaluate_trade_fairness(league_id: str, team_a_roster_id: str, team_a_gives: List[str],
+                       team_b_roster_id: str, team_b_gives: List[str], scoring_format: str) -> CommissionerTradeEvaluation
+detect_trade_collusion(league_id: str, team_a_roster_id: str, team_b_roster_id: str,
+                      trade_history_weeks: Optional[int]) -> CollusionAnalysis
 ```
 
 ## Data Models
@@ -150,6 +175,62 @@ class TradeAnalysis:
     suggested_trades: List[TradeProposal]
     positional_needs: Dict[str, int]
     trade_value_analysis: Dict[str, float]
+
+@dataclass
+class TradePackageAnalysis:
+    fair_value_analysis: FairValueAnalysis
+    positional_adjustments: Dict[str, float]
+    roster_fit_improvement: RosterFitAnalysis
+    acceptance_probability: float
+    recommendation: str
+    rationale: str
+
+@dataclass
+class FairValueAnalysis:
+    team_a_total_points: float
+    team_b_total_points: float
+    point_differential: float
+    value_ratio: float
+
+@dataclass
+class PlayerRankings:
+    rankings: List[PlayerRanking]
+    last_updated: str
+    scoring_format: str  # "ppr" or "half_ppr" only
+
+@dataclass
+class PlayerRanking:
+    player_id: str
+    rank: int
+    projected_points: float
+    tier: int
+    fantasypros_rank: int
+
+@dataclass
+class CommissionerTradeEvaluation:
+    fairness_score: float  # 0-100
+    value_analysis: TradeValueBreakdown
+    roster_impact: RosterImpactAnalysis
+    league_context: LeagueContextAnalysis
+    recommendation: str  # "APPROVE", "INVESTIGATE", "VETO"
+    concerns: List[str]
+    confidence_level: str  # "HIGH", "MEDIUM", "LOW"
+
+@dataclass
+class CollusionAnalysis:
+    collusion_risk: str  # "LOW", "MEDIUM", "HIGH"
+    risk_factors: List[CollusionRiskFactor]
+    historical_patterns: List[str]
+    value_imbalance_percentage: float
+    playoff_impact_analysis: PlayoffImpactAnalysis
+    recommendation: str
+
+@dataclass
+class CollusionRiskFactor:
+    factor_type: str  # "VALUE_IMBALANCE", "ROSTER_DUMPING", "PLAYOFF_MANIPULATION", etc.
+    severity: str  # "LOW", "MEDIUM", "HIGH"
+    description: str
+    evidence: List[str]
 ```
 
 ### API Response Caching Strategy
@@ -159,6 +240,9 @@ class TradeAnalysis:
 - **Matchup Data**: 5 minutes TTL during games, 1 hour otherwise
 - **Trending Players**: 30 minutes TTL
 - **Roster Data**: 15 minutes TTL
+- **Player Rankings**: 4 hours TTL (updated multiple times daily)
+- **Trade Package Analysis**: 30 minutes TTL (for identical trade scenarios)
+- **External Rankings Cache**: 6 hours TTL (balance freshness vs API limits)
 
 ## Error Handling
 
@@ -265,6 +349,7 @@ sleeper-mcp-server/
 │   ├── sleeper_client.py
 │   ├── models.py
 │   ├── cache.py
+│   ├── external_data.py
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   ├── league_tools.py
@@ -273,7 +358,9 @@ sleeper-mcp-server/
 │   │   └── trade_tools.py
 │   └── utils/
 │       ├── __init__.py
-│       └── logging.py
+│       ├── logging.py
+│       ├── trade_analyzer.py
+│       └── commissioner_evaluator.py
 ├── tests/
 ├── requirements.txt
 ├── pyproject.toml
