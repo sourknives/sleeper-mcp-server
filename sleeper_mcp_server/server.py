@@ -152,6 +152,11 @@ class SleeperMCPServer:
                         "league_id": {
                             "type": "string",
                             "description": "League ID to retrieve rosters for"
+                        },
+                        "show_full_rosters": {
+                            "type": "boolean",
+                            "description": "Show complete rosters (true) or truncate for context efficiency (false). Default: false",
+                            "default": False
                         }
                     },
                     "required": ["league_id"]
@@ -370,9 +375,9 @@ class SleeperMCPServer:
             
             # Route tool calls to appropriate handlers
             result = await self._route_tool_call(name, arguments)
-            
+
             # Format response for Claude Desktop
-            return await self._format_response(name, result)
+            return await self._format_response(name, result, arguments)
             
         except Exception as e:
             logger.error(f"Error executing tool '{name}': {e}")
@@ -384,7 +389,7 @@ class SleeperMCPServer:
                     "Verify the Sleeper API is accessible"
                 ]
             }
-            return await self._format_response(name, error_result)
+            return await self._format_response(name, error_result, arguments)
     
     async def _route_tool_call(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -474,17 +479,19 @@ class SleeperMCPServer:
             raise ValueError(f"Unknown tool: {name}")
     
     async def _format_response(
-        self, 
-        tool_name: str, 
-        result: Dict[str, Any]
+        self,
+        tool_name: str,
+        result: Dict[str, Any],
+        arguments: Dict[str, Any] = None
     ) -> List[TextContent]:
         """
         Format tool results for Claude Desktop consumption.
-        
+
         Args:
             tool_name: Name of the executed tool
             result: Tool execution result
-            
+            arguments: Original tool arguments (optional)
+
         Returns:
             List of TextContent objects
         """
@@ -495,9 +502,9 @@ class SleeperMCPServer:
                     type="text",
                     text=self._format_error_response(tool_name, result)
                 )]
-            
+
             # Format successful responses based on tool type
-            formatted_text = await self._format_success_response(tool_name, result)
+            formatted_text = await self._format_success_response(tool_name, result, arguments)
             
             return [TextContent(
                 type="text",
@@ -538,14 +545,15 @@ class SleeperMCPServer:
         
         return formatted
     
-    async def _format_success_response(self, tool_name: str, result: Dict[str, Any]) -> str:
+    async def _format_success_response(self, tool_name: str, result: Dict[str, Any], arguments: Dict[str, Any] = None) -> str:
         """
         Format successful responses based on tool type.
-        
+
         Args:
             tool_name: Name of the executed tool
             result: Successful result dictionary
-            
+            arguments: Original tool arguments (optional)
+
         Returns:
             Formatted response text
         """
@@ -556,7 +564,8 @@ class SleeperMCPServer:
         elif tool_name == "get_league_rosters":
             return self._format_league_rosters_response(result)
         elif tool_name == "get_league_rosters_with_draft_info":
-            return self._format_league_rosters_with_draft_response(result)
+            show_full = arguments.get("show_full_rosters", False) if arguments else False
+            return self._format_league_rosters_with_draft_response(result, show_full)
         elif tool_name == "get_league_users":
             return self._format_league_users_response(result)
         elif tool_name == "get_roster_user_mapping":
@@ -700,8 +709,13 @@ class SleeperMCPServer:
         
         return formatted
     
-    def _format_league_rosters_with_draft_response(self, result: Dict[str, Any]) -> str:
-        """Format league rosters with draft info response."""
+    def _format_league_rosters_with_draft_response(self, result: Dict[str, Any], show_full: bool = False) -> str:
+        """Format league rosters with draft info response.
+
+        Args:
+            result: Result dictionary containing roster data
+            show_full: If True, show all players. If False, truncate for context efficiency.
+        """
         league_id = result.get("league_id", "Unknown")
         rosters = result.get("rosters", [])
         draft_available = result.get("draft_available", False)
@@ -759,21 +773,22 @@ class SleeperMCPServer:
             # Show starting lineup with player names and draft info
             if starters and len(starters) > 0:
                 formatted += f"\n**Starting Lineup:**\n"
-                for starter in starters[:10]:  # Limit to first 10 to avoid too much text
+                starters_to_show = starters if show_full else starters[:10]
+                for starter in starters_to_show:
                     player_info = starter.get("player_info", {})
                     player_name = player_info.get("full_name", f"Player {starter.get('player_id', 'Unknown')}")
                     position = player_info.get("position", "")
                     team = player_info.get("team", "")
                     draft_info = player_info.get("draft_info")
                     acquisition_type = player_info.get("acquisition_type", "unknown")
-                    
+
                     player_display = player_name
                     if position:
                         player_display += f" ({position}"
                         if team:
                             player_display += f", {team}"
                         player_display += ")"
-                    
+
                     # Add draft information
                     if draft_info:
                         round_num = draft_info.get("round")
@@ -784,31 +799,33 @@ class SleeperMCPServer:
                         player_display += f" - Round {round_num}, Pick {pick_no} ({drafted_by_name}){keeper_text}"
                     elif acquisition_type == "free_agent":
                         player_display += " - Free Agent"
-                    
+
                     formatted += f"  • {player_display}\n"
-                
-                if len(starters) > 10:
+
+                if not show_full and len(starters) > 10:
                     formatted += f"  • ... and {len(starters) - 10} more\n"
             
-            # Show some bench players with draft info
+            # Show bench players with draft info
             bench_players = [p for p in players if p not in starters]
             if bench_players and len(bench_players) > 0:
-                formatted += f"\n**Key Bench Players:**\n"
-                for bench_player in bench_players[:5]:  # Show first 5 bench players
+                section_title = "Bench Players:" if show_full else "Key Bench Players:"
+                formatted += f"\n**{section_title}**\n"
+                bench_to_show = bench_players if show_full else bench_players[:5]
+                for bench_player in bench_to_show:
                     player_info = bench_player.get("player_info", {})
                     player_name = player_info.get("full_name", f"Player {bench_player.get('player_id', 'Unknown')}")
                     position = player_info.get("position", "")
                     team = player_info.get("team", "")
                     draft_info = player_info.get("draft_info")
                     acquisition_type = player_info.get("acquisition_type", "unknown")
-                    
+
                     player_display = player_name
                     if position:
                         player_display += f" ({position}"
                         if team:
                             player_display += f", {team}"
                         player_display += ")"
-                    
+
                     # Add draft information
                     if draft_info:
                         round_num = draft_info.get("round")
@@ -819,10 +836,10 @@ class SleeperMCPServer:
                         player_display += f" - Round {round_num}, Pick {pick_no} ({drafted_by_name}){keeper_text}"
                     elif acquisition_type == "free_agent":
                         player_display += " - Free Agent"
-                    
+
                     formatted += f"  • {player_display}\n"
-                
-                if len(bench_players) > 5:
+
+                if not show_full and len(bench_players) > 5:
                     formatted += f"  • ... and {len(bench_players) - 5} more bench players\n"
             
             formatted += "\n"
