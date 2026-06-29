@@ -18,3 +18,16 @@ async def test_get_player_stats_hits_sleeper_com_with_season():
     assert kwargs["params"]["season_type"] == "regular"
     assert kwargs["base_url"] == "https://api.sleeper.com"
     assert result["stats"]["pts_ppr"] == 300.0
+
+
+@pytest.mark.asyncio
+async def test_get_player_stats_week_filters_result():
+    client = SleeperClient()
+    client._make_request = AsyncMock(return_value={"1": {"pts_ppr": 15.0}, "2": {"pts_ppr": 22.0}})
+
+    result = await client.get_player_stats("4046", "2025", week=1)
+    await client.close()
+
+    args, kwargs = client._make_request.await_args
+    assert kwargs["params"]["grouping"] == "week"
+    assert result == {"pts_ppr": 15.0}
