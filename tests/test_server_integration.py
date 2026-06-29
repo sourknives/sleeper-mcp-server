@@ -40,3 +40,22 @@ async def test_get_user_leagues_resolves_season(monkeypatch):
         assert "get_user_leagues" in names
         await client.call_tool("get_user_leagues", {"username": "testuser"})
         assert captured["season"] == "2025"  # offseason fallback
+
+
+@pytest.mark.asyncio
+async def test_player_and_matchup_tools_registered(monkeypatch):
+    async def fake_state(self, sport="nfl"):
+        return NflState(season="2026", season_type="regular", week=1,
+                        display_week=1, previous_season="2025")
+    monkeypatch.setattr("sleeper_mcp_server.sleeper_client.SleeperClient.get_nfl_state", fake_state)
+
+    async def fake_stats(self, player_id, season, week=None):
+        return {"player_id": player_id, "season": season, "stats": {"pts_ppr": 1.0}}
+    monkeypatch.setattr("sleeper_mcp_server.tools.player_tools.PlayerTools.get_player_stats", fake_stats)
+
+    async with create_connected_server_and_client_session(srv.mcp._mcp_server) as client:
+        names = {t.name for t in (await client.list_tools()).tools}
+        assert {"search_players", "get_trending_players", "get_player_stats",
+                "get_matchups", "get_matchup_scores"} <= names
+        res = await client.call_tool("get_player_stats", {"player_id": "4046"})
+        assert res.structuredContent["season"] == "2026"
