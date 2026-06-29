@@ -59,3 +59,12 @@ async def test_player_and_matchup_tools_registered(monkeypatch):
                 "get_matchups", "get_matchup_scores"} <= names
         res = await client.call_tool("get_player_stats", {"player_id": "4046"})
         assert res.structuredContent["season"] == "2026"
+
+
+@pytest.mark.asyncio
+async def test_tool_inventory_is_thirteen_and_no_trade_tools():
+    async with create_connected_server_and_client_session(srv.mcp._mcp_server) as client:
+        names = {t.name for t in (await client.list_tools()).tools}
+    assert "analyze_trade_targets" not in names
+    assert "evaluate_roster_needs" not in names
+    assert len(names) == 13
