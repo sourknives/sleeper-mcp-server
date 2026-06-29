@@ -56,3 +56,6 @@ async def test_player_tools_get_player_stats_shapes_result():
     assert result["position"] == "QB"
     assert result["season"] == "2025"
     assert result["stats"] == {"pts_ppr": 300.0}
+    assert result["week"] is None
+    assert result["player_id"] == "4046"
+    assert result["team"] == "BUF"
