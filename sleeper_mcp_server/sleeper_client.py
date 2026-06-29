@@ -139,24 +139,27 @@ class SleeperClient:
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        base_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Make an HTTP request with retry logic and error handling.
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint path
             params: Query parameters
             json_data: JSON request body
-            
+            base_url: Optional override for base URL
+
         Returns:
             Parsed JSON response
-            
+
         Raises:
             SleeperAPIError: For API-related errors
             RateLimitError: When rate limit is exceeded
         """
-        url = urljoin(self.base_url + "/", endpoint.lstrip("/"))
+        base = (base_url or self.base_url).rstrip("/")
+        url = urljoin(base + "/", endpoint.lstrip("/"))
         retry_count = 0
         last_exception = None
         
@@ -437,48 +440,27 @@ class SleeperClient:
         return trending
     
     async def get_player_stats(
-        self, 
-        sport: str, 
-        season: str, 
+        self,
+        player_id: str,
+        season: str,
         season_type: str = "regular",
-        week: Optional[int] = None
-    ) -> Dict[str, PlayerStats]:
+        week: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Get a single player's stats from api.sleeper.com.
+
+        Returns season-total stats, or a {week: payload} map when week-
+        grouping is requested. `week` filters the weekly map to one week.
         """
-        Get player statistics for a season/week.
-        
-        Args:
-            sport: Sport type (e.g., "nfl")
-            season: Season year (e.g., "2023")
-            season_type: "regular" or "post" (default: "regular")
-            week: Specific week number (optional)
-            
-        Returns:
-            Dictionary mapping player IDs to PlayerStats models
-        """
-        endpoint = f"/stats/{sport}/{season_type}"
+        params: Dict[str, Any] = {"season": season, "season_type": season_type}
         if week is not None:
-            endpoint += f"/{week}"
-        
-        data = await self._make_request("GET", endpoint)
-        if not data:
-            return {}
-        
-        stats = {}
-        for player_id, stats_data in data.items():
-            try:
-                stats_model = PlayerStats(
-                    player_id=player_id,
-                    season=season,
-                    season_type=season_type,
-                    week=week,
-                    stats=stats_data
-                )
-                stats[player_id] = stats_model
-            except ValidationError as e:
-                logger.warning(f"Failed to validate stats for player {player_id}: {e}")
-                continue
-        
-        return stats
+            params["grouping"] = "week"
+        data = await self._make_request(
+            "GET", f"/stats/nfl/player/{player_id}",
+            params=params, base_url="https://api.sleeper.com",
+        )
+        if week is not None and isinstance(data, dict):
+            return data.get(str(week), {})
+        return data or {}
     
     # Matchup endpoints
     
