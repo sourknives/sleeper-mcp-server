@@ -265,6 +265,178 @@ class RosterAnalysis(BaseModel):
     recommendations: List[str] = Field(..., description="Improvement recommendations")
 
 
+class PlayerRanking(BaseModel):
+    """Model for individual player ranking data."""
+    player_id: str = Field(..., description="Unique player identifier")
+    rank: int = Field(..., ge=1, description="Player's rank in rankings")
+    projected_points: float = Field(..., ge=0, description="Projected points for season")
+    tier: int = Field(..., ge=1, description="Player tier grouping")
+    fantasypros_rank: int = Field(..., ge=1, description="FantasyPros consensus rank")
+
+
+class PlayerRankings(BaseModel):
+    """Model for player rankings data."""
+    rankings: List[PlayerRanking] = Field(..., description="List of player rankings")
+    last_updated: str = Field(..., description="Timestamp of last update")
+    scoring_format: str = Field(..., description="Scoring format (ppr or half_ppr)")
+    
+    @field_validator('scoring_format')
+    @classmethod
+    def validate_scoring_format(cls, v):
+        """Validate scoring format is supported."""
+        if v not in ["ppr", "half_ppr"]:
+            raise ValueError("Scoring format must be 'ppr' or 'half_ppr'")
+        return v
+
+
+class FairValueAnalysis(BaseModel):
+    """Model for trade package fair value analysis."""
+    team_a_total_points: float = Field(..., description="Total projected points for team A")
+    team_b_total_points: float = Field(..., description="Total projected points for team B")
+    point_differential: float = Field(..., description="Point difference (team_a - team_b)")
+    value_ratio: float = Field(..., ge=0, description="Value ratio (team_a / team_b)")
+
+
+class RosterFitAnalysis(BaseModel):
+    """Model for roster fit improvement analysis."""
+    team_a_improvement: float = Field(..., description="Team A roster improvement score")
+    team_b_improvement: float = Field(..., description="Team B roster improvement score")
+    positional_impact: Dict[str, float] = Field(..., description="Impact by position")
+    overall_fit_score: float = Field(..., ge=0, le=1, description="Overall trade fit score")
+
+
+class TradePackageAnalysis(BaseModel):
+    """Model for comprehensive trade package analysis."""
+    fair_value_analysis: FairValueAnalysis = Field(..., description="Fair value comparison")
+    positional_adjustments: Dict[str, float] = Field(..., description="Position scarcity adjustments")
+    roster_fit_improvement: RosterFitAnalysis = Field(..., description="Roster fit analysis")
+    acceptance_probability: float = Field(..., ge=0, le=100, description="Acceptance probability percentage")
+    recommendation: str = Field(..., description="Trade recommendation (Accept/Decline/Counter)")
+    rationale: str = Field(..., description="Supporting rationale for recommendation")
+
+
+class TradeValueBreakdown(BaseModel):
+    """Model for detailed trade value breakdown."""
+    team_a_players: List[Dict[str, Any]] = Field(..., description="Team A player values")
+    team_b_players: List[Dict[str, Any]] = Field(..., description="Team B player values")
+    team_a_total_value: float = Field(..., description="Team A total value")
+    team_b_total_value: float = Field(..., description="Team B total value")
+    value_differential: float = Field(..., description="Value difference")
+    value_ratio: float = Field(..., description="Value ratio")
+    imbalance_percentage: float = Field(..., description="Percentage imbalance")
+
+
+class RosterImpactAnalysis(BaseModel):
+    """Model for roster impact analysis."""
+    team_a_strength_before: float = Field(..., description="Team A strength before trade")
+    team_a_strength_after: float = Field(..., description="Team A strength after trade")
+    team_a_improvement: float = Field(..., description="Team A improvement score")
+    team_b_strength_before: float = Field(..., description="Team B strength before trade")
+    team_b_strength_after: float = Field(..., description="Team B strength after trade")
+    team_b_improvement: float = Field(..., description="Team B improvement score")
+    mutual_improvement: bool = Field(..., description="Whether both teams improve")
+    competitive_balance_impact: float = Field(..., description="Impact on league balance")
+    improves_league_balance: bool = Field(..., description="Whether trade improves balance")
+
+
+class LeagueContextAnalysis(BaseModel):
+    """Model for league context analysis."""
+    current_week: int = Field(..., description="Current week number")
+    playoff_start_week: int = Field(..., description="Playoff start week")
+    weeks_to_playoffs: int = Field(..., description="Weeks until playoffs")
+    is_playoff_push_period: bool = Field(..., description="Whether in playoff push period")
+    league_size: int = Field(..., description="Number of teams in league")
+    playoff_teams: int = Field(..., description="Number of playoff teams")
+
+
+class CommissionerTradeEvaluation(BaseModel):
+    """Model for comprehensive commissioner trade evaluation."""
+    fairness_score: float = Field(..., ge=0, le=100, description="Overall fairness score (0-100)")
+    value_analysis: TradeValueBreakdown = Field(..., description="Detailed value breakdown")
+    positional_analysis: Dict[str, Any] = Field(..., description="Positional fairness analysis")
+    roster_impact: RosterImpactAnalysis = Field(..., description="Roster impact assessment")
+    performance_analysis: Dict[str, Any] = Field(..., description="Recent performance analysis")
+    injury_analysis: Dict[str, Any] = Field(..., description="Injury status analysis")
+    league_context: LeagueContextAnalysis = Field(..., description="League context analysis")
+    recommendation: str = Field(..., description="Commissioner recommendation (APPROVE/INVESTIGATE/VETO)")
+    concerns: List[str] = Field(..., description="List of concerns identified")
+    confidence_level: str = Field(..., description="Confidence level (HIGH/MEDIUM/LOW)")
+    evaluation_timestamp: str = Field(..., description="Timestamp of evaluation")
+    
+    @field_validator('recommendation')
+    @classmethod
+    def validate_recommendation(cls, v):
+        """Validate recommendation is one of allowed values."""
+        allowed_recommendations = {"APPROVE", "INVESTIGATE", "VETO"}
+        if v not in allowed_recommendations:
+            raise ValueError(f"Recommendation must be one of: {', '.join(allowed_recommendations)}")
+        return v
+    
+    @field_validator('confidence_level')
+    @classmethod
+    def validate_confidence_level(cls, v):
+        """Validate confidence level is one of allowed values."""
+        allowed_levels = {"HIGH", "MEDIUM", "LOW"}
+        if v not in allowed_levels:
+            raise ValueError(f"Confidence level must be one of: {', '.join(allowed_levels)}")
+        return v
+
+
+class CollusionRiskFactor(BaseModel):
+    """Model for individual collusion risk factors."""
+    factor_type: str = Field(..., description="Type of risk factor")
+    is_suspicious: bool = Field(..., description="Whether factor is suspicious")
+    severity: str = Field(..., description="Severity level (HIGH/MEDIUM/LOW)")
+    description: str = Field(..., description="Description of the risk factor")
+    evidence: List[str] = Field(..., description="Supporting evidence")
+    
+    @field_validator('severity')
+    @classmethod
+    def validate_severity(cls, v):
+        """Validate severity is one of allowed values."""
+        allowed_severities = {"HIGH", "MEDIUM", "LOW"}
+        if v not in allowed_severities:
+            raise ValueError(f"Severity must be one of: {', '.join(allowed_severities)}")
+        return v
+
+
+class PlayoffImpactAnalysis(BaseModel):
+    """Model for playoff impact analysis."""
+    weeks_to_playoffs: int = Field(..., description="Weeks until playoffs start")
+    is_playoff_push_period: bool = Field(..., description="Whether in playoff push period")
+    potential_manipulation: bool = Field(..., description="Whether trade could be manipulation")
+    competitive_impact: str = Field(..., description="Impact on competitive balance")
+
+
+class CollusionAnalysis(BaseModel):
+    """Model for comprehensive collusion analysis."""
+    collusion_risk: str = Field(..., description="Overall collusion risk (LOW/MEDIUM/HIGH)")
+    risk_factors: List[CollusionRiskFactor] = Field(..., description="List of risk factors")
+    value_imbalance_percentage: float = Field(..., description="Value imbalance percentage")
+    recommendation: str = Field(..., description="Collusion-based recommendation")
+    investigation_priority: str = Field(..., description="Investigation priority level")
+    suggested_actions: List[str] = Field(..., description="Suggested commissioner actions")
+    analysis_timestamp: str = Field(..., description="Timestamp of analysis")
+    
+    @field_validator('collusion_risk')
+    @classmethod
+    def validate_collusion_risk(cls, v):
+        """Validate collusion risk is one of allowed values."""
+        allowed_risks = {"LOW", "MEDIUM", "HIGH"}
+        if v not in allowed_risks:
+            raise ValueError(f"Collusion risk must be one of: {', '.join(allowed_risks)}")
+        return v
+    
+    @field_validator('investigation_priority')
+    @classmethod
+    def validate_investigation_priority(cls, v):
+        """Validate investigation priority is one of allowed values."""
+        allowed_priorities = {"LOW", "MEDIUM", "HIGH"}
+        if v not in allowed_priorities:
+            raise ValueError(f"Investigation priority must be one of: {', '.join(allowed_priorities)}")
+        return v
+
+
 class ErrorResponse(BaseModel):
     """Model for error responses."""
     error_type: str = Field(..., description="Type of error encountered")

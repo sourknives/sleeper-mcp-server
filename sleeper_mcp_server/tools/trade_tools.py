@@ -3,6 +3,7 @@ Trade analysis tools for the Sleeper MCP server.
 
 This module provides MCP tools for analyzing trade opportunities, evaluating
 roster needs, and identifying potential trade partners in fantasy football leagues.
+Enhanced with comprehensive trade package evaluation and FantasyPros rankings integration.
 """
 
 import logging
@@ -12,9 +13,11 @@ from collections import defaultdict
 from ..sleeper_client import SleeperClient, SleeperAPIError
 from ..models import (
     League, Roster, Player, TradeAnalysis, TradeProposal, 
-    RosterAnalysis, ErrorResponse
+    RosterAnalysis, ErrorResponse, TradePackageAnalysis, PlayerRankings
 )
 from ..cache import CacheManager, CacheDataType
+from ..external_data import get_current_player_rankings
+from ..utils.trade_analyzer import TradeAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,7 @@ class TradeTools:
         """
         self.client = client
         self.cache = cache
+        self.trade_analyzer = TradeAnalyzer()
         
         # Standard fantasy football position groups and values
         self.position_groups = {
@@ -256,7 +260,312 @@ class TradeTools:
             return {
                 "error": "An unexpected error occurred during roster evaluation",
                 "suggestions": ["Try again in a few moments"]
-            }   
+            }
+    
+    async def evaluate_trade_package(
+        self,
+        league_id: str,
+        team_a_roster_id: int,
+        team_a_gives: List[str],
+        team_b_roster_id: int,
+        team_b_gives: List[str],
+        scoring_format: str = "half_ppr"
+    ) -> dict:
+        """
+        Evaluate a specific trade package between two teams for fairness and fit.
+        
+        Args:
+            league_id: League ID where the trade is happening
+            team_a_roster_id: First team's roster ID
+            team_a_gives: List of player IDs team A is trading away
+            team_b_roster_id: Second team's roster ID
+            team_b_gives: List of player IDs team B is trading away
+            scoring_format: Scoring format ("ppr" or "half_ppr")
+            
+        Returns:
+            Dictionary with comprehensive trade package analysis or error information
+        """
+        try:
+            # Validate scoring format
+            if scoring_format not in ["ppr", "half_ppr"]:
+                return {
+                    "error": f"Unsupported scoring format: {scoring_format}",
+                    "suggestions": ["Use 'ppr' or 'half_ppr' scoring format"]
+                }
+            
+            # Check cache first
+            cache_key = f"trade_package:{league_id}:{team_a_roster_id}:{team_b_roster_id}:{hash(tuple(sorted(team_a_gives + team_b_gives)))}:{scoring_format}"
+            cached_result = self.cache.get(cache_key, CacheDataType.ROSTER_DATA)
+            if cached_result is not None:
+                return cached_result
+            
+            # Get league information
+            league = await self.client.get_league(league_id)
+            if league is None:
+                return {
+                    "error": f"League '{league_id}' not found",
+                    "suggestions": ["Verify the league ID is correct"]
+                }
+            
+            # Get all rosters
+            rosters = await self.client.get_league_rosters(league_id)
+            if not rosters:
+                return {
+                    "error": f"No rosters found for league '{league_id}'",
+                    "suggestions": ["Check if the league has been set up with teams"]
+                }
+            
+            # Find the two rosters involved in the trade
+            team_a_roster = None
+            team_b_roster = None
+            for roster in rosters:
+                if roster.roster_id == team_a_roster_id:
+                    team_a_roster = roster
+                elif roster.roster_id == team_b_roster_id:
+                    team_b_roster = roster
+            
+            if team_a_roster is None:
+                return {
+                    "error": f"Team A roster ID {team_a_roster_id} not found in league",
+                    "suggestions": ["Verify the roster ID is correct"]
+                }
+            
+            if team_b_roster is None:
+                return {
+                    "error": f"Team B roster ID {team_b_roster_id} not found in league",
+                    "suggestions": ["Verify the roster ID is correct"]
+                }
+            
+            # Validate that players belong to the correct teams
+            team_a_player_set = set(team_a_roster.players)
+            team_b_player_set = set(team_b_roster.players)
+            
+            for player_id in team_a_gives:
+                if player_id not in team_a_player_set:
+                    return {
+                        "error": f"Player {player_id} is not on team A's roster",
+                        "suggestions": ["Verify all player IDs belong to the correct teams"]
+                    }
+            
+            for player_id in team_b_gives:
+                if player_id not in team_b_player_set:
+                    return {
+                        "error": f"Player {player_id} is not on team B's roster",
+                        "suggestions": ["Verify all player IDs belong to the correct teams"]
+                    }
+            
+            # Get all players data
+            all_players = await self.client.get_players("nfl")
+            
+            # Get current player rankings with error handling
+            player_rankings_dict = None
+            try:
+                rankings = await get_current_player_rankings(scoring_format, use_cache=True)
+                player_rankings_dict = {r.player_id: r for r in rankings.rankings}
+                logger.info(f"Retrieved {len(rankings.rankings)} player rankings for trade analysis")
+            except Exception as e:
+                logger.warning(f"Failed to get player rankings, using fallback values: {e}")
+                # Continue without rankings - trade analyzer will use fallback values
+            
+            # Perform comprehensive trade analysis
+            analysis = await self.trade_analyzer.evaluate_trade_package(
+                team_a_roster=team_a_roster,
+                team_a_gives=team_a_gives,
+                team_b_roster=team_b_roster,
+                team_b_gives=team_b_gives,
+                league=league,
+                all_players=all_players,
+                player_rankings=player_rankings_dict,
+                scoring_format=scoring_format
+            )
+            
+            # Format result for MCP response
+            result = {
+                "league_id": league_id,
+                "team_a_roster_id": team_a_roster_id,
+                "team_b_roster_id": team_b_roster_id,
+                "team_a_gives": team_a_gives,
+                "team_b_gives": team_b_gives,
+                "scoring_format": scoring_format,
+                "fair_value_analysis": {
+                    "team_a_total_points": analysis.fair_value_analysis.team_a_total_points,
+                    "team_b_total_points": analysis.fair_value_analysis.team_b_total_points,
+                    "point_differential": analysis.fair_value_analysis.point_differential,
+                    "value_ratio": analysis.fair_value_analysis.value_ratio
+                },
+                "positional_adjustments": analysis.positional_adjustments,
+                "roster_fit_improvement": {
+                    "team_a_improvement": analysis.roster_fit_improvement.team_a_improvement,
+                    "team_b_improvement": analysis.roster_fit_improvement.team_b_improvement,
+                    "positional_impact": analysis.roster_fit_improvement.positional_impact,
+                    "overall_fit_score": analysis.roster_fit_improvement.overall_fit_score
+                },
+                "acceptance_probability": analysis.acceptance_probability,
+                "recommendation": analysis.recommendation,
+                "rationale": analysis.rationale,
+                "player_details": await self._get_trade_player_details(
+                    team_a_gives + team_b_gives, all_players, player_rankings_dict
+                )
+            }
+            
+            # Cache the result for 30 minutes
+            self.cache.set(cache_key, result, CacheDataType.ROSTER_DATA, ttl_override=1800)
+            
+            logger.info(f"Evaluated trade package between rosters {team_a_roster_id} and {team_b_roster_id}")
+            return result
+            
+        except ValueError as e:
+            logger.error(f"Validation error in trade package evaluation: {e}")
+            return {
+                "error": str(e),
+                "suggestions": ["Check that all player IDs are valid and belong to the correct teams"]
+            }
+        except SleeperAPIError as e:
+            logger.error(f"API error evaluating trade package: {e}")
+            return {
+                "error": f"Failed to evaluate trade package: {e}",
+                "retry_after": getattr(e, 'retry_after', None)
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error evaluating trade package: {e}")
+            return {
+                "error": "An unexpected error occurred during trade package evaluation",
+                "suggestions": ["Try again in a few moments"]
+            }
+    
+    async def get_current_player_rankings(
+        self,
+        scoring_format: str,
+        position: Optional[str] = None,
+        season: Optional[str] = None
+    ) -> dict:
+        """
+        Get current player rankings from FantasyPros with PPR/Half-PPR support.
+        
+        Args:
+            scoring_format: Scoring format ("ppr" or "half_ppr")
+            position: Optional position filter (QB, RB, WR, TE, K, DEF)
+            season: Optional season (currently not used, defaults to current season)
+            
+        Returns:
+            Dictionary with current player rankings or error information
+        """
+        try:
+            # Validate scoring format
+            if scoring_format not in ["ppr", "half_ppr"]:
+                return {
+                    "error": f"Unsupported scoring format: {scoring_format}",
+                    "suggestions": ["Use 'ppr' or 'half_ppr' scoring format"]
+                }
+            
+            # Validate position if provided
+            if position and position not in ["QB", "RB", "WR", "TE", "K", "DEF"]:
+                return {
+                    "error": f"Unsupported position filter: {position}",
+                    "suggestions": ["Use QB, RB, WR, TE, K, or DEF for position filtering"]
+                }
+            
+            # Check cache first
+            cache_key = f"player_rankings:{scoring_format}:{position or 'all'}:{season or 'current'}"
+            cached_result = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
+            if cached_result is not None:
+                return cached_result
+            
+            # Get rankings from FantasyPros with comprehensive error handling
+            try:
+                rankings = await get_current_player_rankings(
+                    scoring_format=scoring_format,
+                    position=position,
+                    use_cache=True
+                )
+                
+                # Filter by position if specified (FantasyPros scraper doesn't support this directly)
+                filtered_rankings = rankings.rankings
+                if position:
+                    # Get all players to match position info
+                    all_players = await self.client.get_players("nfl")
+                    filtered_rankings = []
+                    
+                    for ranking in rankings.rankings:
+                        # Try to match player by name since FantasyPros uses different IDs
+                        player_name = ranking.player_id.replace("fp_", "").replace("_", " ").title()
+                        
+                        # Find matching player in Sleeper data
+                        matching_player = None
+                        for player_id, player in all_players.items():
+                            if (player.full_name.lower().replace(" ", "") == 
+                                player_name.lower().replace(" ", "")):
+                                matching_player = player
+                                break
+                        
+                        if matching_player and matching_player.position == position:
+                            filtered_rankings.append(ranking)
+                
+                result = {
+                    "scoring_format": scoring_format,
+                    "position_filter": position,
+                    "season": season or "current",
+                    "last_updated": rankings.last_updated,
+                    "total_rankings": len(filtered_rankings),
+                    "rankings": [
+                        {
+                            "player_id": r.player_id,
+                            "rank": r.rank,
+                            "projected_points": r.projected_points,
+                            "tier": r.tier,
+                            "fantasypros_rank": r.fantasypros_rank
+                        }
+                        for r in filtered_rankings[:100]  # Limit to top 100 for response size
+                    ],
+                    "data_source": "FantasyPros consensus rankings",
+                    "notes": [
+                        "Rankings are scraped from FantasyPros public pages",
+                        "Player IDs may not match Sleeper IDs exactly",
+                        "Data is cached for 6 hours to respect rate limits"
+                    ]
+                }
+                
+                # Cache the result for 4 hours
+                self.cache.set(cache_key, result, CacheDataType.PLAYER_DATA, ttl_override=14400)
+                
+                logger.info(f"Retrieved {len(filtered_rankings)} player rankings for {scoring_format}")
+                return result
+                
+            except Exception as ranking_error:
+                logger.error(f"Failed to get FantasyPros rankings: {ranking_error}")
+                
+                # Try to return cached data even if expired
+                cached_result = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
+                if cached_result:
+                    logger.warning("Using expired cached rankings due to FantasyPros fetch failure")
+                    cached_result["warning"] = "Using cached data due to FantasyPros unavailability"
+                    cached_result["cache_age"] = "expired"
+                    return cached_result
+                
+                # Return error if no cached data available
+                return {
+                    "error": "Failed to retrieve current player rankings",
+                    "details": str(ranking_error),
+                    "suggestions": [
+                        "FantasyPros may be temporarily unavailable",
+                        "Try again in a few minutes",
+                        "Check your internet connection"
+                    ],
+                    "fallback_available": False
+                }
+            
+        except SleeperAPIError as e:
+            logger.error(f"API error getting player rankings: {e}")
+            return {
+                "error": f"Failed to get player rankings: {e}",
+                "retry_after": getattr(e, 'retry_after', None)
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error getting player rankings: {e}")
+            return {
+                "error": "An unexpected error occurred while getting player rankings",
+                "suggestions": ["Try again in a few moments"]
+            }
  
     async def _analyze_roster_strength(
         self, 
@@ -737,3 +1046,54 @@ class TradeTools:
                 starter_quality[position] = "None - No players at position"
         
         return starter_quality
+    
+    async def _get_trade_player_details(
+        self,
+        player_ids: List[str],
+        all_players: Dict[str, Player],
+        player_rankings: Optional[Dict[str, any]] = None
+    ) -> Dict[str, dict]:
+        """
+        Get detailed information about players involved in a trade.
+        
+        Args:
+            player_ids: List of player IDs
+            all_players: Dictionary of all players
+            player_rankings: Optional player rankings data
+            
+        Returns:
+            Dictionary with player details
+        """
+        player_details = {}
+        
+        for player_id in player_ids:
+            if player_id in all_players:
+                player = all_players[player_id]
+                
+                # Get ranking info if available
+                ranking_info = None
+                if player_rankings and player_id in player_rankings:
+                    ranking = player_rankings[player_id]
+                    ranking_info = {
+                        "rank": ranking.rank,
+                        "projected_points": ranking.projected_points,
+                        "tier": ranking.tier
+                    }
+                
+                player_details[player_id] = {
+                    "name": player.full_name,
+                    "position": player.position,
+                    "team": player.team,
+                    "status": player.status.value if player.status else "Unknown",
+                    "ranking_info": ranking_info
+                }
+            else:
+                player_details[player_id] = {
+                    "name": "Unknown Player",
+                    "position": "Unknown",
+                    "team": None,
+                    "status": "Unknown",
+                    "ranking_info": None
+                }
+        
+        return player_details

@@ -30,8 +30,10 @@ from .tools.league_tools import LeagueTools
 from .tools.matchup_tools import MatchupTools
 from .tools.trade_tools import TradeTools
 from .tools.player_tools import PlayerTools
+from .tools.commissioner_tools import CommissionerTools
 
 logger = logging.getLogger(__name__)
+commissioner_logger = logging.getLogger(f"{__name__}.commissioner")
 
 
 class SleeperMCPServer:
@@ -46,6 +48,7 @@ class SleeperMCPServer:
         self.matchup_tools: Optional[MatchupTools] = None
         self.trade_tools: Optional[TradeTools] = None
         self.player_tools: Optional[PlayerTools] = None
+        self.commissioner_tools: Optional[CommissionerTools] = None
         
         # Register MCP handlers
         self._register_handlers()
@@ -80,6 +83,7 @@ class SleeperMCPServer:
             self.matchup_tools = MatchupTools(self.client, self.cache)
             self.trade_tools = TradeTools(self.client, self.cache)
             self.player_tools = PlayerTools(self.client, self.cache)
+            self.commissioner_tools = CommissionerTools(self.client, self.cache)
             
             logger.info("Sleeper MCP Server initialized successfully")
             
@@ -343,6 +347,175 @@ class SleeperMCPServer:
                     },
                     "required": ["league_id", "roster_id"]
                 }
+            ),
+            Tool(
+                name="evaluate_trade_package",
+                description="Evaluate a specific trade package between two teams for fairness and fit",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "league_id": {
+                            "type": "string",
+                            "description": "League ID where the trade is happening"
+                        },
+                        "team_a_roster_id": {
+                            "type": "integer",
+                            "description": "First team's roster ID"
+                        },
+                        "team_a_gives": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of player IDs team A is trading away"
+                        },
+                        "team_b_roster_id": {
+                            "type": "integer",
+                            "description": "Second team's roster ID"
+                        },
+                        "team_b_gives": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of player IDs team B is trading away"
+                        },
+                        "scoring_format": {
+                            "type": "string",
+                            "description": "Scoring format for analysis (default: 'half_ppr')",
+                            "enum": ["ppr", "half_ppr"],
+                            "default": "half_ppr"
+                        }
+                    },
+                    "required": ["league_id", "team_a_roster_id", "team_a_gives", "team_b_roster_id", "team_b_gives"]
+                }
+            ),
+            Tool(
+                name="get_current_player_rankings",
+                description="Get current player rankings from FantasyPros with PPR/Half-PPR support",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "scoring_format": {
+                            "type": "string",
+                            "description": "Scoring format for rankings",
+                            "enum": ["ppr", "half_ppr"]
+                        },
+                        "position": {
+                            "type": "string",
+                            "description": "Optional position filter (QB, RB, WR, TE, K, DEF)",
+                            "enum": ["QB", "RB", "WR", "TE", "K", "DEF"]
+                        },
+                        "season": {
+                            "type": "string",
+                            "description": "Optional season (currently not used, defaults to current season)"
+                        }
+                    },
+                    "required": ["scoring_format"]
+                }
+            ),
+            
+            # Commissioner Tools
+            Tool(
+                name="evaluate_trade_fairness",
+                description="Evaluate trade fairness with comprehensive commissioner analysis including value, roster fit, and league context",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "league_id": {
+                            "type": "string",
+                            "description": "League ID where the trade is happening"
+                        },
+                        "team_a_roster_id": {
+                            "type": "integer",
+                            "description": "First team's roster ID"
+                        },
+                        "team_a_gives": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of player IDs team A is trading away"
+                        },
+                        "team_b_roster_id": {
+                            "type": "integer",
+                            "description": "Second team's roster ID"
+                        },
+                        "team_b_gives": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of player IDs team B is trading away"
+                        },
+                        "scoring_format": {
+                            "type": "string",
+                            "description": "Scoring format for analysis (default: 'half_ppr')",
+                            "enum": ["ppr", "half_ppr"],
+                            "default": "half_ppr"
+                        },
+                        "current_week": {
+                            "type": "integer",
+                            "description": "Current week number (default: 1)",
+                            "minimum": 1,
+                            "maximum": 22,
+                            "default": 1
+                        },
+                        "playoff_start_week": {
+                            "type": "integer",
+                            "description": "Week when playoffs start (default: 14)",
+                            "minimum": 1,
+                            "maximum": 22,
+                            "default": 14
+                        }
+                    },
+                    "required": ["league_id", "team_a_roster_id", "team_a_gives", "team_b_roster_id", "team_b_gives"]
+                }
+            ),
+            Tool(
+                name="detect_trade_collusion",
+                description="Detect potential collusion patterns in trade proposals with risk assessment and investigation recommendations",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "league_id": {
+                            "type": "string",
+                            "description": "League ID where the trade is happening"
+                        },
+                        "team_a_roster_id": {
+                            "type": "integer",
+                            "description": "First team's roster ID"
+                        },
+                        "team_b_roster_id": {
+                            "type": "integer",
+                            "description": "Second team's roster ID"
+                        },
+                        "team_a_gives": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of player IDs team A is trading away"
+                        },
+                        "team_b_gives": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of player IDs team B is trading away"
+                        },
+                        "trade_history_weeks": {
+                            "type": "integer",
+                            "description": "Number of weeks of trade history to analyze (default: 8)",
+                            "minimum": 1,
+                            "maximum": 22,
+                            "default": 8
+                        },
+                        "current_week": {
+                            "type": "integer",
+                            "description": "Current week number (default: 1)",
+                            "minimum": 1,
+                            "maximum": 22,
+                            "default": 1
+                        },
+                        "playoff_start_week": {
+                            "type": "integer",
+                            "description": "Week when playoffs start (default: 14)",
+                            "minimum": 1,
+                            "maximum": 22,
+                            "default": 14
+                        }
+                    },
+                    "required": ["league_id", "team_a_roster_id", "team_b_roster_id", "team_a_gives", "team_b_gives"]
+                }
             )
         ]
         
@@ -469,6 +642,75 @@ class SleeperMCPServer:
                 league_id=arguments["league_id"],
                 roster_id=arguments["roster_id"]
             )
+        elif name == "evaluate_trade_package":
+            return await self.trade_tools.evaluate_trade_package(
+                league_id=arguments["league_id"],
+                team_a_roster_id=arguments["team_a_roster_id"],
+                team_a_gives=arguments["team_a_gives"],
+                team_b_roster_id=arguments["team_b_roster_id"],
+                team_b_gives=arguments["team_b_gives"],
+                scoring_format=arguments.get("scoring_format", "half_ppr")
+            )
+        elif name == "get_current_player_rankings":
+            return await self.trade_tools.get_current_player_rankings(
+                scoring_format=arguments["scoring_format"],
+                position=arguments.get("position"),
+                season=arguments.get("season")
+            )
+        
+        # Commissioner Tools
+        elif name == "evaluate_trade_fairness":
+            # Log commissioner action for audit trail
+            commissioner_logger.info(
+                f"Trade fairness evaluation requested - League: {arguments['league_id']}, "
+                f"Teams: {arguments['team_a_roster_id']} vs {arguments['team_b_roster_id']}, "
+                f"Players: {len(arguments['team_a_gives'])} vs {len(arguments['team_b_gives'])}"
+            )
+            result = await self.commissioner_tools.evaluate_trade_fairness(
+                league_id=arguments["league_id"],
+                team_a_roster_id=arguments["team_a_roster_id"],
+                team_a_gives=arguments["team_a_gives"],
+                team_b_roster_id=arguments["team_b_roster_id"],
+                team_b_gives=arguments["team_b_gives"],
+                scoring_format=arguments.get("scoring_format", "half_ppr"),
+                current_week=arguments.get("current_week", 1),
+                playoff_start_week=arguments.get("playoff_start_week", 14)
+            )
+            # Log evaluation result for audit trail
+            if "error" not in result:
+                fairness_score = result.get("fairness_score", 0)
+                recommendation = result.get("recommendation", "Unknown")
+                commissioner_logger.info(
+                    f"Trade fairness evaluation completed - League: {arguments['league_id']}, "
+                    f"Score: {fairness_score:.1f}, Recommendation: {recommendation}"
+                )
+            return result
+        elif name == "detect_trade_collusion":
+            # Log commissioner action for audit trail
+            commissioner_logger.info(
+                f"Collusion detection requested - League: {arguments['league_id']}, "
+                f"Teams: {arguments['team_a_roster_id']} vs {arguments['team_b_roster_id']}, "
+                f"History weeks: {arguments.get('trade_history_weeks', 8)}"
+            )
+            result = await self.commissioner_tools.detect_trade_collusion(
+                league_id=arguments["league_id"],
+                team_a_roster_id=arguments["team_a_roster_id"],
+                team_b_roster_id=arguments["team_b_roster_id"],
+                team_a_gives=arguments["team_a_gives"],
+                team_b_gives=arguments["team_b_gives"],
+                trade_history_weeks=arguments.get("trade_history_weeks", 8),
+                current_week=arguments.get("current_week", 1),
+                playoff_start_week=arguments.get("playoff_start_week", 14)
+            )
+            # Log collusion analysis result for audit trail
+            if "error" not in result:
+                collusion_risk = result.get("collusion_risk", "Unknown")
+                investigation_priority = result.get("investigation_priority", "Unknown")
+                commissioner_logger.info(
+                    f"Collusion detection completed - League: {arguments['league_id']}, "
+                    f"Risk: {collusion_risk}, Priority: {investigation_priority}"
+                )
+            return result
         
         else:
             raise ValueError(f"Unknown tool: {name}")
@@ -577,6 +819,14 @@ class SleeperMCPServer:
             return self._format_trade_analysis_response(result)
         elif tool_name == "evaluate_roster_needs":
             return self._format_roster_evaluation_response(result)
+        elif tool_name == "evaluate_trade_package":
+            return self._format_trade_package_response(result)
+        elif tool_name == "get_current_player_rankings":
+            return self._format_player_rankings_response(result)
+        elif tool_name == "evaluate_trade_fairness":
+            return self._format_trade_fairness_response(result)
+        elif tool_name == "detect_trade_collusion":
+            return self._format_collusion_detection_response(result)
         else:
             # Fallback to JSON representation
             import json
@@ -1311,6 +1561,244 @@ class SleeperMCPServer:
             for stat, value in other_stats.items():
                 stat_name = stat.replace('_', ' ').title()
                 formatted += f"• {stat_name}: {value}\n"
+        
+        return formatted
+    
+    def _format_trade_package_response(self, result: Dict[str, Any]) -> str:
+        """Format trade package evaluation response."""
+        if "error" in result:
+            return f"❌ **Trade Package Analysis Error**\n\n{result['error']}"
+        
+        analysis = result.get("analysis", {})
+        fair_value = analysis.get("fair_value_analysis", {})
+        roster_fit = analysis.get("roster_fit_improvement", {})
+        acceptance_prob = analysis.get("acceptance_probability", 0)
+        recommendation = analysis.get("recommendation", "Unknown")
+        rationale = analysis.get("rationale", "No rationale provided")
+        
+        formatted = f"📊 **Trade Package Analysis**\n\n"
+        
+        # Fair Value Analysis
+        formatted += f"**💰 Fair Value Analysis:**\n"
+        team_a_points = fair_value.get("team_a_total_points", 0)
+        team_b_points = fair_value.get("team_b_total_points", 0)
+        point_diff = fair_value.get("point_differential", 0)
+        value_ratio = fair_value.get("value_ratio", 1.0)
+        
+        formatted += f"• Team A Total Points: {team_a_points:.1f}\n"
+        formatted += f"• Team B Total Points: {team_b_points:.1f}\n"
+        formatted += f"• Point Differential: {point_diff:+.1f}\n"
+        formatted += f"• Value Ratio: {value_ratio:.2f}\n\n"
+        
+        # Roster Fit Analysis
+        if roster_fit:
+            formatted += f"**🔄 Roster Fit Improvement:**\n"
+            team_a_fit = roster_fit.get("team_a_improvement", 0)
+            team_b_fit = roster_fit.get("team_b_improvement", 0)
+            formatted += f"• Team A Improvement: {team_a_fit:+.1f}%\n"
+            formatted += f"• Team B Improvement: {team_b_fit:+.1f}%\n\n"
+        
+        # Acceptance Probability
+        formatted += f"**📈 Acceptance Probability:** {acceptance_prob:.0f}%\n\n"
+        
+        # Recommendation
+        rec_emoji = "✅" if recommendation == "Accept" else "❌" if recommendation == "Decline" else "🤔"
+        formatted += f"**{rec_emoji} Recommendation:** {recommendation}\n\n"
+        
+        # Rationale
+        formatted += f"**💭 Analysis:**\n{rationale}\n"
+        
+        return formatted
+    
+    def _format_player_rankings_response(self, result: Dict[str, Any]) -> str:
+        """Format player rankings response."""
+        if "error" in result:
+            return f"❌ **Player Rankings Error**\n\n{result['error']}"
+        
+        rankings_data = result.get("rankings", {})
+        rankings = rankings_data.get("rankings", [])
+        last_updated = rankings_data.get("last_updated", "Unknown")
+        scoring_format = rankings_data.get("scoring_format", "Unknown")
+        position_filter = result.get("position_filter")
+        
+        formatted = f"📈 **Player Rankings ({scoring_format.upper().replace('_', '-')})**\n\n"
+        formatted += f"**Last Updated:** {last_updated}\n"
+        
+        if position_filter:
+            formatted += f"**Position Filter:** {position_filter}\n"
+        
+        formatted += f"**Total Players:** {len(rankings)}\n\n"
+        
+        if not rankings:
+            formatted += "No rankings data available."
+            return formatted
+        
+        # Show top rankings (limit to 25 to avoid too much text)
+        display_count = min(25, len(rankings))
+        formatted += f"**Top {display_count} Players:**\n"
+        
+        for i, player in enumerate(rankings[:display_count], 1):
+            player_name = player.get("player_name", "Unknown Player")
+            position = player.get("position", "")
+            team = player.get("team", "")
+            projected_points = player.get("projected_points", 0)
+            tier = player.get("tier", 0)
+            fantasypros_rank = player.get("fantasypros_rank", 0)
+            
+            player_display = f"{player_name}"
+            if position:
+                player_display += f" ({position}"
+                if team:
+                    player_display += f", {team}"
+                player_display += ")"
+            
+            formatted += f"{i:2d}. {player_display}\n"
+            formatted += f"    • Projected Points: {projected_points:.1f}\n"
+            if tier > 0:
+                formatted += f"    • Tier: {tier}\n"
+            if fantasypros_rank > 0:
+                formatted += f"    • FantasyPros Rank: {fantasypros_rank}\n"
+            formatted += "\n"
+        
+        if len(rankings) > display_count:
+            formatted += f"... and {len(rankings) - display_count} more players\n"
+        
+        return formatted
+    
+    def _format_trade_fairness_response(self, result: Dict[str, Any]) -> str:
+        """Format trade fairness evaluation response."""
+        if "error" in result:
+            return f"❌ **Trade Fairness Evaluation Error**\n\n{result['error']}"
+        
+        league_id = result.get("league_id", "Unknown")
+        team_a_roster_id = result.get("team_a_roster_id", "Unknown")
+        team_b_roster_id = result.get("team_b_roster_id", "Unknown")
+        fairness_score = result.get("fairness_score", 0)
+        recommendation = result.get("recommendation", "Unknown")
+        confidence_level = result.get("confidence_level", "Unknown")
+        concerns = result.get("concerns", [])
+        commissioner_notes = result.get("commissioner_notes", [])
+        
+        formatted = f"⚖️ **Trade Fairness Evaluation**\n\n"
+        formatted += f"**League:** {league_id}\n"
+        formatted += f"**Teams:** Roster {team_a_roster_id} ↔ Roster {team_b_roster_id}\n\n"
+        
+        # Fairness Score with visual indicator
+        score_emoji = "🟢" if fairness_score >= 70 else "🟡" if fairness_score >= 40 else "🔴"
+        formatted += f"**Fairness Score:** {fairness_score:.1f}/100 {score_emoji}\n\n"
+        
+        # Recommendation
+        rec_emoji = "✅" if recommendation == "APPROVE" else "🔍" if recommendation == "INVESTIGATE" else "❌"
+        formatted += f"**Recommendation:** {recommendation} {rec_emoji}\n"
+        formatted += f"**Confidence Level:** {confidence_level}\n\n"
+        
+        # Value Analysis
+        value_analysis = result.get("value_analysis", {})
+        if value_analysis:
+            formatted += f"**💰 Value Analysis:**\n"
+            team_a_value = value_analysis.get("team_a_total_value", 0)
+            team_b_value = value_analysis.get("team_b_total_value", 0)
+            value_difference = value_analysis.get("value_difference_percentage", 0)
+            formatted += f"• Team A Value: {team_a_value:.1f} points\n"
+            formatted += f"• Team B Value: {team_b_value:.1f} points\n"
+            formatted += f"• Value Difference: {value_difference:+.1f}%\n\n"
+        
+        # Roster Impact
+        roster_impact = result.get("roster_impact", {})
+        if roster_impact:
+            formatted += f"**📊 Roster Impact:**\n"
+            team_a_impact = roster_impact.get("team_a_improvement", 0)
+            team_b_impact = roster_impact.get("team_b_improvement", 0)
+            formatted += f"• Team A Improvement: {team_a_impact:+.1f}%\n"
+            formatted += f"• Team B Improvement: {team_b_impact:+.1f}%\n\n"
+        
+        # League Context
+        league_context = result.get("league_context", {})
+        if league_context:
+            formatted += f"**🏆 League Context:**\n"
+            playoff_implications = league_context.get("playoff_implications", "None identified")
+            competitive_balance = league_context.get("competitive_balance_impact", "Neutral")
+            formatted += f"• Playoff Implications: {playoff_implications}\n"
+            formatted += f"• Competitive Balance: {competitive_balance}\n\n"
+        
+        # Concerns
+        if concerns:
+            formatted += f"**⚠️ Areas of Concern:**\n"
+            for concern in concerns[:5]:  # Limit to top 5 concerns
+                formatted += f"• {concern}\n"
+            formatted += "\n"
+        
+        # Commissioner Notes
+        if commissioner_notes:
+            formatted += f"**📝 Commissioner Notes:**\n"
+            for note in commissioner_notes[:3]:  # Limit to top 3 notes
+                formatted += f"• {note}\n"
+        
+        return formatted
+    
+    def _format_collusion_detection_response(self, result: Dict[str, Any]) -> str:
+        """Format collusion detection response."""
+        if "error" in result:
+            return f"❌ **Collusion Detection Error**\n\n{result['error']}"
+        
+        league_id = result.get("league_id", "Unknown")
+        team_a_roster_id = result.get("team_a_roster_id", "Unknown")
+        team_b_roster_id = result.get("team_b_roster_id", "Unknown")
+        collusion_risk = result.get("collusion_risk", "LOW")
+        value_imbalance = result.get("value_imbalance_percentage", 0)
+        recommendation = result.get("recommendation", "Unknown")
+        investigation_priority = result.get("investigation_priority", "LOW")
+        risk_factors = result.get("risk_factors", [])
+        suggested_actions = result.get("suggested_actions", [])
+        commissioner_summary = result.get("commissioner_summary", {})
+        
+        formatted = f"🔍 **Trade Collusion Analysis**\n\n"
+        formatted += f"**League:** {league_id}\n"
+        formatted += f"**Teams:** Roster {team_a_roster_id} ↔ Roster {team_b_roster_id}\n\n"
+        
+        # Risk Level with visual indicator
+        risk_emoji = "🟢" if collusion_risk == "LOW" else "🟡" if collusion_risk == "MEDIUM" else "🔴"
+        formatted += f"**Collusion Risk:** {collusion_risk} {risk_emoji}\n"
+        formatted += f"**Investigation Priority:** {investigation_priority}\n"
+        formatted += f"**Value Imbalance:** {value_imbalance:.1f}%\n\n"
+        
+        # Risk Assessment
+        risk_assessment = commissioner_summary.get("risk_assessment", "")
+        if risk_assessment:
+            formatted += f"**📋 Risk Assessment:**\n{risk_assessment}\n\n"
+        
+        # Risk Factors
+        if risk_factors:
+            formatted += f"**⚠️ Risk Factors Identified:**\n"
+            for factor in risk_factors[:5]:  # Limit to top 5 factors
+                factor_type = factor.get("factor_type", "Unknown")
+                severity = factor.get("severity", "Unknown")
+                description = factor.get("description", "No description")
+                severity_emoji = "🔴" if severity == "HIGH" else "🟡" if severity == "MEDIUM" else "🟢"
+                formatted += f"• **{factor_type}** {severity_emoji}\n"
+                formatted += f"  {description}\n"
+            formatted += "\n"
+        
+        # Primary Concerns
+        primary_concerns = commissioner_summary.get("primary_concerns", "")
+        if primary_concerns:
+            formatted += f"**🎯 Primary Concerns:**\n{primary_concerns}\n\n"
+        
+        # Recommendation
+        rec_emoji = "✅" if "APPROVE" in recommendation.upper() else "🔍" if "INVESTIGATE" in recommendation.upper() else "❌"
+        formatted += f"**Recommendation:** {recommendation} {rec_emoji}\n\n"
+        
+        # Suggested Actions
+        if suggested_actions:
+            formatted += f"**📋 Suggested Actions:**\n"
+            for action in suggested_actions[:3]:  # Limit to top 3 actions
+                formatted += f"• {action}\n"
+            formatted += "\n"
+        
+        # Investigation Notes
+        investigation_notes = commissioner_summary.get("investigation_notes", "")
+        if investigation_notes:
+            formatted += f"**🔍 Investigation Notes:**\n{investigation_notes}\n"
         
         return formatted
     
