@@ -6,7 +6,7 @@ and trending data from the Sleeper Fantasy Football API.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..sleeper_client import SleeperClient, SleeperAPIError
 from ..models import Player, TrendingPlayer, PlayerStats, ErrorResponse
@@ -179,75 +179,34 @@ class PlayerTools:
                 "suggestions": ["Try again in a few moments"]
             }
     
-    async def get_player_stats(self, player_id: str, season: str = "2024") -> dict:
-        """
-        Get player statistics for a specific season.
-        
-        Args:
-            player_id: Player ID to get stats for
-            season: Season year (default: "2024")
-            
-        Returns:
-            Dictionary with player stats or error information
-        """
+    async def get_player_stats(
+        self, player_id: str, season: str, week: Optional[int] = None
+    ) -> dict[str, Any]:
+        """Get a single player's statistics for a season (optionally one week)."""
         try:
-            # Check cache first
-            cache_key = f"player_stats:{player_id}:{season}"
-            cached_result = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
-            if cached_result is not None:
-                return cached_result
-            
-            # Get player stats from API
-            stats = await self.client.get_player_stats(player_id, season)
-            
-            if not stats:
-                # Try to get player info to provide better error message
-                all_players = await self.client.get_players("nfl")
-                if player_id in all_players:
-                    player = all_players[player_id]
-                    return {
-                        "error": f"No stats found for {player.full_name} in {season} season",
-                        "suggestions": [
-                            "Check if the player was active in this season",
-                            "Try a different season year",
-                            "Verify the player ID is correct"
-                        ],
-                        "player_name": player.full_name
-                    }
-                else:
-                    return {
-                        "error": f"Player ID '{player_id}' not found",
-                        "suggestions": ["Verify the player ID is correct"]
-                    }
-            
-            # Get player info for context
+            cache_key = f"player_stats:{player_id}:{season}:{week or 'season'}"
+            cached = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
+            if cached is not None:
+                return cached
+
+            raw = await self.client.get_player_stats(player_id, season, week=week)
+            stats = raw.get("stats", raw) if isinstance(raw, dict) else {}
+
             all_players = await self.client.get_players("nfl")
-            player_info = all_players.get(player_id)
-            
+            info = all_players.get(player_id)
+
             result = {
                 "player_id": player_id,
                 "season": season,
-                "player_name": player_info.full_name if player_info else "Unknown",
-                "position": player_info.position if player_info else "Unknown",
-                "team": player_info.team if player_info else "Unknown",
-                "stats": stats.stats if hasattr(stats, 'stats') else stats
+                "week": week,
+                "player_name": info.full_name if info else "Unknown",
+                "position": info.position if info else "Unknown",
+                "team": info.team if info else "Unknown",
+                "stats": stats,
             }
-            
-            # Cache for 1 hour (stats don't change frequently)
             self.cache.set(cache_key, result, CacheDataType.PLAYER_DATA, ttl_override=3600)
-            
-            logger.info(f"Retrieved stats for player {player_id} in {season}")
             return result
-            
         except SleeperAPIError as e:
             logger.error(f"API error getting player stats: {e}")
-            return {
-                "error": f"Failed to retrieve player stats: {e}",
-                "retry_after": getattr(e, 'retry_after', None)
-            }
-        except Exception as e:
-            logger.error(f"Unexpected error getting player stats: {e}")
-            return {
-                "error": "An unexpected error occurred while retrieving player stats",
-                "suggestions": ["Try again in a few moments"]
-            }
+            return {"error": f"Failed to retrieve player stats: {e}",
+                    "retry_after": getattr(e, "retry_after", None)}
