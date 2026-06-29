@@ -23,6 +23,7 @@ from .models import (
     Roster,
     Matchup,
     ErrorResponse,
+    NflState,
 )
 
 
@@ -345,17 +346,17 @@ class SleeperClient:
     async def get_league_rosters(self, league_id: str) -> List[Roster]:
         """
         Get all rosters in a league.
-        
+
         Args:
             league_id: League ID
-            
+
         Returns:
             List of Roster models
         """
         data = await self._make_request("GET", f"/league/{league_id}/rosters")
         if not data:
             return []
-        
+
         rosters = []
         for roster_data in data:
             try:
@@ -363,9 +364,14 @@ class SleeperClient:
             except ValidationError as e:
                 logger.warning(f"Failed to validate roster data: {e}")
                 continue
-        
+
         return rosters
-    
+
+    async def get_nfl_state(self, sport: str = "nfl") -> NflState:
+        """Get current season/week state for a sport."""
+        data = await self._make_request("GET", f"/state/{sport}")
+        return NflState.model_validate(data)
+
     # Player endpoints
     
     async def get_players(self, sport: str = "nfl") -> Dict[str, Player]:

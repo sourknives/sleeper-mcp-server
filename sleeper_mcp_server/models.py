@@ -12,6 +12,16 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+class NflState(BaseModel):
+    """Model for the /state/<sport> endpoint."""
+    season: str = Field(..., description="Active season year")
+    season_type: str = Field(..., description="pre, regular, post, or off")
+    week: int = Field(default=0, description="Current week (0 in offseason)")
+    display_week: int = Field(default=1, description="Week to display in UI")
+    previous_season: Optional[str] = Field(None, description="Prior season year")
+    leg: Optional[int] = Field(None, description="Current leg")
+
+
 class LeagueStatus(str, Enum):
     """Enum for league status values."""
     PRE_DRAFT = "pre_draft"
