@@ -59,3 +59,17 @@ async def test_player_tools_get_player_stats_shapes_result():
     assert result["week"] is None
     assert result["player_id"] == "4046"
     assert result["team"] == "BUF"
+
+
+@pytest.mark.asyncio
+async def test_get_players_caches_within_day():
+    client = SleeperClient()
+    client._make_request = AsyncMock(return_value={"4046": {
+        "player_id": "4046", "full_name": "Josh Allen", "position": "QB", "team": "BUF"}})
+
+    first = await client.get_players("nfl")
+    second = await client.get_players("nfl")
+    await client.close()
+
+    assert "4046" in first and "4046" in second
+    client._make_request.assert_awaited_once()  # only one network fetch
