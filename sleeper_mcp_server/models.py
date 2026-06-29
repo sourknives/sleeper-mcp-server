@@ -120,7 +120,22 @@ class Player(BaseModel):
         default_factory=dict, description="Player statistics"
     )
     fantasy_positions: Optional[List[str]] = Field(None, description="Fantasy eligible positions")
-    
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_full_name(cls, data):
+        """Derive full_name when missing.
+
+        Sleeper team-defense (DEF) entries omit full_name and carry the name
+        in first_name/last_name (e.g. "Houston" / "Texans"); without this they
+        fail validation and get dropped from the player catalog.
+        """
+        if isinstance(data, dict) and not data.get("full_name"):
+            first = (data.get("first_name") or "").strip()
+            last = (data.get("last_name") or "").strip()
+            data["full_name"] = f"{first} {last}".strip() or data.get("player_id") or "Unknown"
+        return data
+
     @field_validator('position')
     @classmethod
     def validate_position(cls, v):
