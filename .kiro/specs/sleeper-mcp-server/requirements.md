@@ -28,8 +28,10 @@ The MCP server will be designed for compatibility with Claude Desktop's MCP fram
 1. WHEN a user searches for a player THEN the system SHALL return player details including position, team, and current season stats
 2. WHEN a user requests trending players THEN the system SHALL fetch the most added/dropped players with trend data
 3. WHEN a user asks for player projections THEN the system SHALL retrieve available projection data for specified players
-4. WHEN a user requests trade analysis THEN the system SHALL analyze other rosters in the league to identify potential trade matches based on positional needs and player values
+4. WHEN a user requests basic trade analysis THEN the system SHALL analyze other rosters in the league to identify potential trade matches based on positional needs and player values
 5. WHEN a user asks for roster analysis THEN the system SHALL evaluate team strengths and weaknesses across all roster positions
+6. WHEN a user requests specific trade package evaluation THEN the system SHALL analyze the proposed trade for fairness, team fit, and provide acceptance probability estimates
+7. WHEN a user requests current player rankings THEN the system SHALL retrieve up-to-date rest-of-season rankings and projections from multiple sources
 6. IF a player name is ambiguous THEN the system SHALL return multiple matching players for user clarification
 
 ### Requirement 3
@@ -66,6 +68,37 @@ The MCP server will be designed for compatibility with Claude Desktop's MCP fram
 4. IF the server is unavailable THEN Claude SHALL receive appropriate error messages indicating the service status
 
 ### Requirement 6
+
+**User Story:** As a fantasy football manager, I want comprehensive trade package analysis similar to FantasyPros Trade Analyzer, so that I can make informed decisions about specific trade proposals with confidence in their fairness and impact.
+
+#### Acceptance Criteria
+
+1. WHEN a user submits a specific player-for-player trade package for analysis THEN the system SHALL calculate fair value analysis showing total projected points for each side of the trade
+2. WHEN analyzing trade packages THEN the system SHALL apply positional value adjustments accounting for RB and TE scarcity premiums
+3. WHEN evaluating trades THEN the system SHALL assess roster fit improvement for both teams involved in the trade
+4. WHEN analyzing trade proposals THEN the system SHALL provide an acceptance probability estimate from 0-100% based on team needs and player values
+5. WHEN completing trade analysis THEN the system SHALL provide a clear recommendation (Accept/Decline/Counter) with supporting rationale
+6. WHEN users request current player rankings THEN the system SHALL retrieve data from FantasyPros consensus rankings by scraping their public ranking pages
+7. WHEN retrieving player rankings THEN the system SHALL support PPR and Half-PPR scoring formats with position filtering
+8. IF FantasyPros ranking pages are unavailable THEN the system SHALL fall back to cached data and inform the user of data freshness
+9. WHEN analyzing trades THEN the system SHALL only consider player trades and SHALL NOT support draft pick trading functionality
+
+### Requirement 7
+
+**User Story:** As a league commissioner, I want a comprehensive trade evaluation tool that analyzes trade fairness and detects potential collusion, so that I can maintain league integrity and make informed decisions about trade vetoes.
+
+#### Acceptance Criteria
+
+1. WHEN a commissioner submits a trade for evaluation THEN the system SHALL calculate a fairness score from 0-100 based on player values, positional adjustments, and roster fit
+2. WHEN analyzing trades for collusion THEN the system SHALL flag suspicious patterns including extreme value imbalances, roster dumping, and trades between related users
+3. WHEN evaluating trade fairness THEN the system SHALL consider multiple factors including projected points, positional scarcity, team needs, and recent performance trends
+4. WHEN detecting potential collusion THEN the system SHALL provide specific reasons for concern such as lopsided value (>30% difference), playoff positioning manipulation, or historical trading patterns
+5. WHEN generating commissioner reports THEN the system SHALL provide detailed analysis including value breakdown, roster impact assessment, and recommended action (approve/investigate/veto)
+6. WHEN analyzing trades THEN the system SHALL consider league context including playoff standings, remaining schedule strength, and injury status of involved players
+7. WHEN flagging collusion concerns THEN the system SHALL provide confidence levels (Low/Medium/High) for different types of suspicious activity
+8. IF insufficient data exists for analysis THEN the system SHALL clearly indicate data limitations and provide analysis based on available information
+
+### Requirement 8
 
 **User Story:** As a developer, I want the MCP server to be built with a reliable technology stack, so that it provides consistent performance and is maintainable.
 

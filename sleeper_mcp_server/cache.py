@@ -9,7 +9,7 @@ for performance monitoring.
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, TypeVar, Generic
+from typing import Any, Dict, List, Optional, TypeVar, Generic
 from threading import Lock
 from dataclasses import dataclass
 from enum import Enum
@@ -26,6 +26,10 @@ class CacheDataType(str, Enum):
     MATCHUP_DATA = "matchup_data"  # 5 minutes TTL during games, 1 hour otherwise
     TRENDING_PLAYERS = "trending_players"  # 30 minutes TTL
     ROSTER_DATA = "roster_data"  # 15 minutes TTL
+    PLAYER_RANKINGS = "player_rankings"  # 4 hours TTL
+    TRADE_ANALYSIS = "trade_analysis"  # 30 minutes TTL
+    EXTERNAL_DATA = "external_data"  # 6 hours TTL
+    FANTASYPROS_RANKINGS = "fantasypros_rankings"  # 6 hours TTL for FantasyPros data
 
 
 @dataclass
@@ -60,6 +64,10 @@ class CacheManager:
         CacheDataType.MATCHUP_DATA: 3600,  # 1 hour (default, can be overridden)
         CacheDataType.TRENDING_PLAYERS: 1800,  # 30 minutes
         CacheDataType.ROSTER_DATA: 900,  # 15 minutes
+        CacheDataType.PLAYER_RANKINGS: 14400,  # 4 hours
+        CacheDataType.TRADE_ANALYSIS: 1800,  # 30 minutes
+        CacheDataType.EXTERNAL_DATA: 21600,  # 6 hours
+        CacheDataType.FANTASYPROS_RANKINGS: 21600,  # 6 hours for FantasyPros data
     }
     
     def __init__(self, ttl_config: Optional[Dict[CacheDataType, int]] = None):
@@ -81,6 +89,15 @@ class CacheManager:
             'misses': 0,
             'evictions': 0,
             'invalidations': 0
+        }
+        
+        # FantasyPros specific monitoring
+        self._fantasypros_stats = {
+            'hits': 0,
+            'misses': 0,
+            'cache_warming_requests': 0,
+            'stale_data_served': 0,
+            'last_successful_fetch': None
         }
         
         logger.info(f"Cache manager initialized with TTL config: {self._ttl_config}")
@@ -340,6 +357,179 @@ class CacheManager:
             f"(Expired: {info['expired_entries']}), "
             f"Evictions: {stats['evictions']}, "
             f"Invalidations: {stats['invalidations']}"
+        )
+    
+    # FantasyPros-specific caching methods
+    
+    def get_fantasypros_data(self, key: str) -> Optional[Any]:
+        """
+        Retrieve FantasyPros data from cache with specific monitoring.
+        
+        Args:
+            key: Cache key for FantasyPros data
+            
+        Returns:
+            Cached FantasyPros data if available, None otherwise
+        """
+        data = self.get(key, CacheDataType.FANTASYPROS_RANKINGS)
+        
+        if data is not None:
+            self._fantasypros_stats['hits'] += 1
+            logger.debug(f"FantasyPros cache hit for key: {key}")
+        else:
+            self._fantasypros_stats['misses'] += 1
+            logger.debug(f"FantasyPros cache miss for key: {key}")
+        
+        return data
+    
+    def set_fantasypros_data(self, key: str, data: Any, ttl_override: Optional[int] = None) -> None:
+        """
+        Store FantasyPros data in cache with specific monitoring.
+        
+        Args:
+            key: Cache key for FantasyPros data
+            data: FantasyPros data to cache
+            ttl_override: Optional TTL override in seconds
+        """
+        self.set(key, data, CacheDataType.FANTASYPROS_RANKINGS, ttl_override)
+        self._fantasypros_stats['last_successful_fetch'] = datetime.now().isoformat()
+        logger.debug(f"Cached FantasyPros data for key: {key}")
+    
+    def get_stale_fantasypros_data(self, key: str) -> Optional[Any]:
+        """
+        Retrieve FantasyPros data even if expired (for fallback scenarios).
+        
+        Args:
+            key: Cache key for FantasyPros data
+            
+        Returns:
+            Cached FantasyPros data even if expired, None if not found
+        """
+        with self._lock:
+            entry = self._cache.get(key)
+            
+            if entry is None:
+                return None
+            
+            # Return data even if expired
+            if entry.is_expired():
+                self._fantasypros_stats['stale_data_served'] += 1
+                logger.warning(f"Serving stale FantasyPros data for key: {key} (age: {entry.age_seconds():.1f}s)")
+            
+            return entry.data
+    
+    def warm_fantasypros_cache(self, scoring_formats: List[str]) -> Dict[str, bool]:
+        """
+        Pre-warm cache with FantasyPros data for specified scoring formats.
+        
+        Args:
+            scoring_formats: List of scoring formats to warm ("ppr", "half_ppr")
+            
+        Returns:
+            Dictionary mapping scoring format to success status
+        """
+        results = {}
+        
+        for scoring_format in scoring_formats:
+            cache_key = f"fantasypros_rankings_{scoring_format}_all"
+            
+            # Check if data is already cached and fresh
+            existing_data = self.get(cache_key, CacheDataType.FANTASYPROS_RANKINGS)
+            if existing_data is not None:
+                logger.debug(f"FantasyPros cache already warm for {scoring_format}")
+                results[scoring_format] = True
+                continue
+            
+            # Mark as cache warming request
+            self._fantasypros_stats['cache_warming_requests'] += 1
+            
+            try:
+                # This would typically trigger the actual data fetch
+                # For now, we just mark the attempt
+                logger.info(f"Cache warming requested for FantasyPros {scoring_format} rankings")
+                results[scoring_format] = False  # Would be True after successful fetch
+                
+            except Exception as e:
+                logger.error(f"Failed to warm cache for FantasyPros {scoring_format}: {e}")
+                results[scoring_format] = False
+        
+        return results
+    
+    def invalidate_stale_fantasypros_data(self, max_age_hours: float = 12.0) -> int:
+        """
+        Invalidate FantasyPros data that is older than specified age.
+        
+        Args:
+            max_age_hours: Maximum age in hours before data is considered stale
+            
+        Returns:
+            Number of entries invalidated
+        """
+        max_age_seconds = max_age_hours * 3600
+        current_time = time.time()
+        keys_to_remove = []
+        
+        with self._lock:
+            for key, entry in self._cache.items():
+                if (entry.data_type == CacheDataType.FANTASYPROS_RANKINGS and 
+                    (current_time - entry.created_at) > max_age_seconds):
+                    keys_to_remove.append(key)
+            
+            for key in keys_to_remove:
+                del self._cache[key]
+                self._stats['invalidations'] += 1
+        
+        if keys_to_remove:
+            logger.info(f"Invalidated {len(keys_to_remove)} stale FantasyPros cache entries (older than {max_age_hours}h)")
+        
+        return len(keys_to_remove)
+    
+    def get_fantasypros_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get FantasyPros-specific cache statistics.
+        
+        Returns:
+            Dictionary containing FantasyPros cache statistics
+        """
+        total_fp_requests = self._fantasypros_stats['hits'] + self._fantasypros_stats['misses']
+        fp_hit_rate = (self._fantasypros_stats['hits'] / total_fp_requests * 100) if total_fp_requests > 0 else 0
+        
+        # Count current FantasyPros entries
+        fp_entries = 0
+        fp_expired_entries = 0
+        
+        with self._lock:
+            for entry in self._cache.values():
+                if entry.data_type == CacheDataType.FANTASYPROS_RANKINGS:
+                    fp_entries += 1
+                    if entry.is_expired():
+                        fp_expired_entries += 1
+        
+        return {
+            'hits': self._fantasypros_stats['hits'],
+            'misses': self._fantasypros_stats['misses'],
+            'hit_rate_percent': round(fp_hit_rate, 2),
+            'total_requests': total_fp_requests,
+            'cache_warming_requests': self._fantasypros_stats['cache_warming_requests'],
+            'stale_data_served': self._fantasypros_stats['stale_data_served'],
+            'current_entries': fp_entries,
+            'expired_entries': fp_expired_entries,
+            'last_successful_fetch': self._fantasypros_stats['last_successful_fetch']
+        }
+    
+    def log_fantasypros_performance(self) -> None:
+        """Log FantasyPros-specific cache performance statistics."""
+        stats = self.get_fantasypros_cache_stats()
+        
+        logger.info(
+            f"FantasyPros Cache Performance - "
+            f"Hit Rate: {stats['hit_rate_percent']}% "
+            f"({stats['hits']}/{stats['total_requests']} requests), "
+            f"Entries: {stats['current_entries']} "
+            f"(Expired: {stats['expired_entries']}), "
+            f"Cache Warming: {stats['cache_warming_requests']}, "
+            f"Stale Served: {stats['stale_data_served']}, "
+            f"Last Fetch: {stats['last_successful_fetch'] or 'Never'}"
         )
 
 
