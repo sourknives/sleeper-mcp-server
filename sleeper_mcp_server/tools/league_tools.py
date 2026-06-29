@@ -30,14 +30,14 @@ class LeagueTools:
         self.client = client
         self.cache = cache
     
-    async def get_user_leagues(self, username: str, season: str = "2024") -> dict:
+    async def get_user_leagues(self, username: str, season: str) -> dict:
         """
         Get all leagues for a username in a specific season.
-        
+
         Args:
             username: Sleeper username to look up
-            season: Season year (default: "2024")
-            
+            season: Season year (required, e.g. "2025")
+
         Returns:
             Dictionary with leagues list or error information
         """
