@@ -65,7 +65,7 @@ class SleeperClient:
     ):
         """
         Initialize the Sleeper API client.
-        
+
         Args:
             base_url: Base URL for Sleeper API
             timeout: Request timeout in seconds
@@ -78,12 +78,17 @@ class SleeperClient:
         self.max_retries = max_retries
         self.rate_limit_delay = rate_limit_delay
         self.max_rate_limit_delay = max_rate_limit_delay
-        
+
         # Rate limiting state
         self._last_request_time = 0.0
         self._request_count = 0
         self._rate_limit_reset_time = 0.0
-        
+
+        # Player catalog cache (24h TTL)
+        self._players_cache: Dict[str, Dict[str, Player]] = {}
+        self._players_cache_at: Dict[str, float] = {}
+        self._players_ttl: float = 24 * 3600
+
         # HTTP client configuration
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),
@@ -380,17 +385,21 @@ class SleeperClient:
     async def get_players(self, sport: str = "nfl") -> Dict[str, Player]:
         """
         Get all players for a sport.
-        
+
         Args:
             sport: Sport type (default: "nfl")
-            
+
         Returns:
             Dictionary mapping player IDs to Player models
         """
+        now = time.time()
+        if sport in self._players_cache and (now - self._players_cache_at.get(sport, 0)) < self._players_ttl:
+            return self._players_cache[sport]
+
         data = await self._make_request("GET", f"/players/{sport}")
         if not data:
             return {}
-        
+
         players = {}
         for player_id, player_data in data.items():
             try:
@@ -398,7 +407,9 @@ class SleeperClient:
             except ValidationError as e:
                 logger.warning(f"Failed to validate player {player_id}: {e}")
                 continue
-        
+
+        self._players_cache[sport] = players
+        self._players_cache_at[sport] = now
         return players
     
     async def get_trending_players(
