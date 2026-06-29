@@ -12,7 +12,6 @@ A Model Context Protocol (MCP) server that provides Claude Desktop with access t
   - Free agent tracking for undrafted players
 - **Player Information**: Search players, get statistics, and trending data
 - **Matchup Analysis**: View current and historical matchups with real-time scoring
-- **Trade Analysis**: Analyze potential trade targets and evaluate roster needs
 - **Intelligent Caching**: Optimized API usage with TTL-based caching
 - **Rate Limiting**: Respects Sleeper API limits with exponential backoff
 
@@ -20,7 +19,7 @@ A Model Context Protocol (MCP) server that provides Claude Desktop with access t
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Claude Desktop application
 
 ### Install from Source
@@ -69,7 +68,8 @@ Add the following configuration to your Claude Desktop MCP settings file:
         "get_user_leagues",
         "get_league_info",
         "search_players",
-        "get_trending_players"
+        "get_trending_players",
+        "get_nfl_state"
       ]
     }
   }
@@ -102,7 +102,8 @@ Add the following configuration to your Claude Desktop MCP settings file:
         "get_trending_players",
         "get_player_stats",
         "get_matchups",
-        "get_matchup_scores"
+        "get_matchup_scores",
+        "get_nfl_state"
       ]
     }
   }
@@ -127,11 +128,12 @@ Get all leagues for a username in a specific season.
 
 **Parameters:**
 - `username` (required): Sleeper username to look up
-- `season` (optional): Season year (default: "2024")
+- `season` (optional): Season year (defaults to current season)
 
 **Example Usage:**
 ```
-Show me all leagues for username "john_doe" in 2024
+Show me all leagues for username "john_doe"
+Show me all leagues for username "john_doe" in 2025
 ```
 
 #### `get_league_info`
@@ -229,15 +231,17 @@ What players are being dropped the most?
 ```
 
 #### `get_player_stats`
-Get player statistics for a specific season.
+Get player statistics for a specific season and optional week.
 
 **Parameters:**
 - `player_id` (required): Player ID to get stats for
-- `season` (optional): Season year (default: "2024")
+- `season` (optional): Season year (defaults to current season)
+- `week` (optional): Week number within the season
 
 **Example Usage:**
 ```
-Get stats for player ID "4046" in 2024
+Get stats for player ID "4046"
+Get stats for player ID "4046" in week 5
 ```
 
 ### Matchup Tools
@@ -266,32 +270,18 @@ Get real-time scoring information for matchups in a specific week.
 What are the current scores for week 8 in league "123456789"?
 ```
 
-### Trade Tools
+### State Tools
 
-#### `analyze_trade_targets`
-Analyze potential trade targets for a roster based on positional needs.
+#### `get_nfl_state`
+Get the current NFL state including season, week, and season type.
 
 **Parameters:**
-- `league_id` (required): League ID to analyze
-- `roster_id` (required): Roster ID requesting trade analysis
-- `position` (optional): Position to focus analysis on (QB, RB, WR, TE, K, DEF)
+- None
 
 **Example Usage:**
 ```
-Analyze trade targets for roster 3 in league "123456789"
-Find running back trade targets for my roster
-```
-
-#### `evaluate_roster_needs`
-Evaluate roster strengths and weaknesses across all positions.
-
-**Parameters:**
-- `league_id` (required): League ID to analyze
-- `roster_id` (required): Roster ID to evaluate
-
-**Example Usage:**
-```
-Evaluate the strengths and weaknesses of roster 1 in league "123456789"
+What's the current NFL week?
+What season are we in?
 ```
 
 ## API Rate Limiting and Caching
@@ -354,7 +344,8 @@ Different data types have optimized cache TTL values:
 "What players are being added the most this week?"
 
 # Player statistics
-"Show me Josh Allen's stats for 2024"
+"Show me Josh Allen's stats"
+"Show me Josh Allen's stats for week 5"
 ```
 
 ### Matchup Analysis
@@ -386,19 +377,6 @@ Different data types have optimized cache TTL values:
 "Show me players who are outperforming their draft position"
 ```
 
-### Trade Analysis
-
-```
-# Find trade partners
-"Who should I target for a trade in my league? I need a running back"
-
-# Roster evaluation
-"Analyze my roster strengths and weaknesses"
-
-# Specific position analysis
-"Find quarterback trade targets for my team"
-```
-
 ## Troubleshooting
 
 ### Common Issues
@@ -410,7 +388,7 @@ Different data types have optimized cache TTL values:
 - No response from MCP tools
 
 **Solutions:**
-- Verify Python installation: `python --version` (should be 3.8+)
+- Verify Python installation: `python --version` (should be 3.10+)
 - Check package installation: `pip show sleeper-mcp-server`
 - Verify Claude Desktop configuration syntax
 - Check logs for specific error messages
