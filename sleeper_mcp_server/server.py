@@ -1,7 +1,6 @@
 """FastMCP server for the Sleeper Fantasy Football API."""
 
 import logging
-import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Literal, Optional

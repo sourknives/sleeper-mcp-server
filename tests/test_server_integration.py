@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import AsyncMock
 from mcp.shared.memory import create_connected_server_and_client_session
 
 import sleeper_mcp_server.server as srv
