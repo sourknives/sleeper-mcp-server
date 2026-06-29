@@ -150,6 +150,7 @@ class SleeperClient:
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         base_url: Optional[str] = None,
+        headers: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Make an HTTP request with retry logic and error handling.
@@ -183,6 +184,7 @@ class SleeperClient:
                     url=url,
                     params=params,
                     json=json_data,
+                    headers=headers,
                 )
                 
                 # Handle successful responses
@@ -390,6 +392,26 @@ class SleeperClient:
         self._state_cache[sport] = state
         self._state_cache_at[sport] = now
         return state
+
+    async def get_projections(
+        self, season: str, week: int = 1, season_type: str = "regular"
+    ) -> List[Dict[str, Any]]:
+        """Get projection rows (including ADP) from api.sleeper.com.
+
+        The projections host rejects non-browser user-agents (HTTP 403), so a
+        browser User-Agent is sent for this request.
+        """
+        browser_ua = (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+        )
+        data = await self._make_request(
+            "GET", f"/projections/nfl/{season}/{week}",
+            params={"season_type": season_type},
+            base_url="https://api.sleeper.com",
+            headers={"User-Agent": browser_ua},
+        )
+        return data or []
 
     # Player endpoints
     
