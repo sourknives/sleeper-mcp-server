@@ -170,16 +170,8 @@ class PlayerStats(BaseModel):
     player_id: str = Field(..., description="Unique player identifier")
     season: str = Field(..., pattern=r"^\d{4}$", description="Season year")
     season_type: str = Field(default="regular", description="Season type")
-    week: Optional[int] = Field(None, ge=1, le=18, description="Week number")
+    week: Optional[int] = Field(None, ge=1, le=22, description="Week number")
     stats: Dict[str, Union[int, float]] = Field(..., description="Statistical data")
-    
-    @field_validator('stats')
-    @classmethod
-    def validate_stats(cls, v):
-        """Validate that stats dictionary is not empty."""
-        if not v:
-            raise ValueError("Stats cannot be empty")
-        return v
 
 
 class Roster(BaseModel):
@@ -191,6 +183,9 @@ class Roster(BaseModel):
     starters: List[str] = Field(default_factory=list, description="Starting lineup player IDs")
     reserve: Optional[List[str]] = Field(default_factory=list, description="Reserve player IDs")
     taxi: Optional[List[str]] = Field(default_factory=list, description="Taxi squad player IDs")
+    keepers: Optional[List[str]] = Field(default_factory=list, description="Kept player IDs")
+    player_map: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Per-player metadata")
+    co_owners: Optional[List[str]] = Field(default_factory=list, description="Co-owner user IDs")
     settings: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Roster settings")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional roster data")
     
@@ -228,12 +223,17 @@ class Matchup(BaseModel):
     
     @model_validator(mode='after')
     def validate_starters_in_players(self):
-        """Validate that starters are subset of players."""
+        """Warn (do not raise) when starters aren't all in players.
+
+        Real data violates this when a starter is dropped mid-week.
+        """
         if self.players and self.starters:
-            players_set = set(self.players)
-            starters_set = set(self.starters)
-            if not starters_set.issubset(players_set):
-                raise ValueError("All starters must be in the players list")
+            missing = set(self.starters) - set(self.players)
+            if missing:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Matchup roster {self.roster_id}: starters not in players: {missing}"
+                )
         return self
 
 
@@ -245,34 +245,6 @@ class MatchupScore(BaseModel):
     projected_points: Optional[float] = Field(None, description="Projected final points")
     players_points: Dict[str, float] = Field(..., description="Points by player ID")
     starters_points: List[float] = Field(..., description="Points by starter position")
-
-
-class TradeProposal(BaseModel):
-    """Model for trade proposal analysis."""
-    target_roster_id: int = Field(..., description="Target roster for trade")
-    give_players: List[str] = Field(..., description="Players to trade away")
-    receive_players: List[str] = Field(..., description="Players to receive")
-    trade_value: float = Field(..., description="Estimated trade value differential")
-    confidence: float = Field(..., ge=0, le=1, description="Confidence in trade analysis")
-
-
-class TradeAnalysis(BaseModel):
-    """Model for comprehensive trade analysis."""
-    roster_id: int = Field(..., description="Analyzing roster ID")
-    target_teams: List[int] = Field(..., description="Potential trade partner roster IDs")
-    suggested_trades: List[TradeProposal] = Field(..., description="Recommended trade proposals")
-    positional_needs: Dict[str, int] = Field(..., description="Positional strength ratings")
-    trade_value_analysis: Dict[str, float] = Field(..., description="Player value assessments")
-
-
-class RosterAnalysis(BaseModel):
-    """Model for roster strength analysis."""
-    roster_id: int = Field(..., description="Roster being analyzed")
-    positional_strength: Dict[str, float] = Field(..., description="Strength by position (0-1)")
-    weakest_positions: List[str] = Field(..., description="Positions needing improvement")
-    strongest_positions: List[str] = Field(..., description="Positions of strength")
-    overall_rating: float = Field(..., ge=0, le=1, description="Overall roster rating")
-    recommendations: List[str] = Field(..., description="Improvement recommendations")
 
 
 class ErrorResponse(BaseModel):
