@@ -72,6 +72,9 @@ class League(BaseModel):
     roster_positions: List[str] = Field(..., description="Available roster positions")
     total_rosters: int = Field(..., ge=2, le=32, description="Total number of rosters")
     draft_id: Optional[str] = Field(None, description="Draft identifier if applicable")
+    previous_league_id: Optional[str] = Field(
+        None, description="League ID of the prior season's league (season chaining)"
+    )
     avatar: Optional[str] = Field(None, description="League avatar URL")
     
     @field_validator('roster_positions')
