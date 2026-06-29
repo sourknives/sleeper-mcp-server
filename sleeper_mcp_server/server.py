@@ -62,3 +62,47 @@ async def _default_season(app: AppContext) -> str:
 async def get_nfl_state(ctx: Context) -> NflState:
     """Get the current NFL season, week, and season type from Sleeper."""
     return await _ctx(ctx).client.get_nfl_state()
+
+
+@mcp.tool(title="User Leagues", annotations=READ_ONLY)
+async def get_user_leagues(username: str, ctx: Context, season: Optional[str] = None) -> dict[str, Any]:
+    """Get all NFL leagues for a Sleeper username. Defaults to the current season."""
+    app = _ctx(ctx)
+    season = season or await _default_season(app)
+    return await app.league.get_user_leagues(username=username, season=season)
+
+
+@mcp.tool(title="League Info", annotations=READ_ONLY)
+async def get_league_info(league_id: str, ctx: Context) -> dict[str, Any]:
+    """Get detailed information about a specific league."""
+    return await _ctx(ctx).league.get_league_info(league_id=league_id)
+
+
+@mcp.tool(title="League Rosters", annotations=READ_ONLY)
+async def get_league_rosters(league_id: str, ctx: Context) -> dict[str, Any]:
+    """Get all team rosters in a league."""
+    return await _ctx(ctx).league.get_league_rosters(league_id=league_id)
+
+
+@mcp.tool(title="League Rosters with Draft Info", annotations=READ_ONLY)
+async def get_league_rosters_with_draft_info(league_id: str, ctx: Context) -> dict[str, Any]:
+    """Get all rosters with draft-position metadata per player."""
+    return await _ctx(ctx).league.get_league_rosters_with_draft_info(league_id=league_id)
+
+
+@mcp.tool(title="League Users", annotations=READ_ONLY)
+async def get_league_users(league_id: str, ctx: Context) -> dict[str, Any]:
+    """Get all users/participants in a league."""
+    return await _ctx(ctx).league.get_league_users(league_id=league_id)
+
+
+@mcp.tool(title="Roster-User Mapping", annotations=READ_ONLY)
+async def get_roster_user_mapping(league_id: str, ctx: Context) -> dict[str, Any]:
+    """Get a mapping of roster IDs to user names for a league."""
+    return await _ctx(ctx).league.get_roster_user_mapping(league_id=league_id)
+
+
+@mcp.tool(title="League Draft", annotations=READ_ONLY)
+async def get_league_draft(league_id: str, ctx: Context) -> dict[str, Any]:
+    """Get draft results and pick information for a league."""
+    return await _ctx(ctx).league.get_league_draft(league_id=league_id)
