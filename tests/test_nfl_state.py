@@ -23,6 +23,19 @@ async def test_get_nfl_state_parses_state_payload():
     client._make_request.assert_awaited_once_with("GET", "/state/nfl")
 
 
+@pytest.mark.asyncio
+async def test_get_nfl_state_caches_within_ttl():
+    client = SleeperClient()
+    client._make_request = AsyncMock(return_value={
+        "week": 0, "season": "2026", "season_type": "off",
+        "previous_season": "2025", "display_week": 1})
+    first = await client.get_nfl_state()
+    second = await client.get_nfl_state()
+    await client.close()
+    assert first.season == "2026" and second.season == "2026"
+    client._make_request.assert_awaited_once()
+
+
 def _state(**kw):
     base = {"season": "2026", "season_type": "regular", "week": 3,
             "display_week": 3, "previous_season": "2025"}
