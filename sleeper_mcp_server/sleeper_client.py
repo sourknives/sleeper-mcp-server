@@ -89,6 +89,11 @@ class SleeperClient:
         self._players_cache_at: Dict[str, float] = {}
         self._players_ttl: float = 24 * 3600
 
+        # NFL state cache (~1h TTL)
+        self._state_cache: Dict[str, NflState] = {}
+        self._state_cache_at: Dict[str, float] = {}
+        self._state_ttl: float = 3600
+
         # HTTP client configuration
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout),
@@ -376,9 +381,15 @@ class SleeperClient:
         return rosters
 
     async def get_nfl_state(self, sport: str = "nfl") -> NflState:
-        """Get current season/week state for a sport."""
+        """Get current season/week state for a sport (cached ~1h)."""
+        now = time.time()
+        if sport in self._state_cache and (now - self._state_cache_at.get(sport, 0)) < self._state_ttl:
+            return self._state_cache[sport]
         data = await self._make_request("GET", f"/state/{sport}")
-        return NflState.model_validate(data)
+        state = NflState.model_validate(data)
+        self._state_cache[sport] = state
+        self._state_cache_at[sport] = now
+        return state
 
     # Player endpoints
     
