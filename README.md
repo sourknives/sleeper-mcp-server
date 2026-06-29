@@ -1,6 +1,6 @@
 # Sleeper MCP Server
 
-A Model Context Protocol (MCP) server that provides Claude Desktop with access to Sleeper Fantasy Football API data. This server enables users to query league information, player data, matchups, draft results, and perform trade analysis through natural language interactions with Claude.
+A Model Context Protocol (MCP) server that provides Claude Desktop with access to Sleeper Fantasy Football API data. This server enables users to query league information, player data, matchups, and draft results through natural language interactions with Claude.
 
 ## Features
 
