@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/sourknives-sleeper-mcp-server-badge.png)](https://mseep.ai/app/sourknives-sleeper-mcp-server)
+
 # Sleeper MCP Server
 
 A Model Context Protocol (MCP) server that provides Claude Desktop with access to Sleeper Fantasy Football API data. This server enables users to query league information, player data, matchups, and draft results through natural language interactions with Claude.
