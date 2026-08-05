@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from ..sleeper_client import SleeperClient, SleeperAPIError
 from ..models import Player, TrendingPlayer, PlayerStats, ErrorResponse
-from ..cache import CacheManager, CacheDataType
+from ..cache import CacheManager, PLAYER_TTL, TRENDING_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class PlayerTools:
         try:
             # Check cache first
             cache_key = f"search_players:{query}:{position or 'all'}"
-            cached_result = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -84,7 +84,7 @@ class PlayerTools:
             }
             
             # Cache for 1 hour
-            self.cache.set(cache_key, result, CacheDataType.PLAYER_DATA, ttl_override=3600)
+            self.cache.set(cache_key, result, PLAYER_TTL)
             
             logger.info(f"Found {len(matching_players)} players matching '{query}'")
             return result
@@ -123,7 +123,7 @@ class PlayerTools:
             
             # Check cache first
             cache_key = f"trending_players:{sport}:{add_drop}"
-            cached_result = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -161,7 +161,7 @@ class PlayerTools:
             }
             
             # Cache for 30 minutes (trending data changes frequently)
-            self.cache.set(cache_key, result, CacheDataType.PLAYER_DATA, ttl_override=1800)
+            self.cache.set(cache_key, result, TRENDING_TTL)
             
             logger.info(f"Retrieved {len(trending_players)} trending {add_drop} players")
             return result
@@ -185,7 +185,7 @@ class PlayerTools:
         """Get a single player's statistics for a season (optionally one week)."""
         try:
             cache_key = f"player_stats:{player_id}:{season}:{week or 'season'}"
-            cached = self.cache.get(cache_key, CacheDataType.PLAYER_DATA)
+            cached = self.cache.get(cache_key)
             if cached is not None:
                 return cached
 
@@ -204,7 +204,7 @@ class PlayerTools:
                 "team": info.team if info else "Unknown",
                 "stats": stats,
             }
-            self.cache.set(cache_key, result, CacheDataType.PLAYER_DATA, ttl_override=3600)
+            self.cache.set(cache_key, result, PLAYER_TTL)
             return result
         except SleeperAPIError as e:
             logger.error(f"API error getting player stats: {e}")
