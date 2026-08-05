@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 
 from ..sleeper_client import SleeperClient, SleeperAPIError
 from ..models import Matchup, League, ErrorResponse
-from ..cache import CacheManager, CacheDataType
+from ..cache import CacheManager, MATCHUP_FINAL_TTL, MATCHUP_LIVE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class MatchupTools:
             
             # Check cache first
             cache_key = f"matchups:{league_id}:{week}"
-            cached_result = self.cache.get(cache_key, CacheDataType.MATCHUP_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -216,9 +216,9 @@ class MatchupTools:
                 any(team["points"] > 0 and team.get("players_points") for team in matchup["teams"])
                 for matchup in formatted_matchups
             )
-            ttl = 300 if is_live else 3600  # 5 minutes if live, 1 hour if completed
+            ttl = MATCHUP_LIVE_TTL if is_live else MATCHUP_FINAL_TTL
             
-            self.cache.set(cache_key, result, CacheDataType.MATCHUP_DATA, ttl_override=ttl)
+            self.cache.set(cache_key, result, ttl)
             
             logger.info(f"Retrieved {len(formatted_matchups)} matchups for league {league_id}, week {week}")
             return result
@@ -261,7 +261,7 @@ class MatchupTools:
             
             # Check cache first (shorter TTL for scores as they update frequently)
             cache_key = f"matchup_scores:{league_id}:{week}"
-            cached_result = self.cache.get(cache_key, CacheDataType.MATCHUP_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -449,9 +449,9 @@ class MatchupTools:
             
             # Cache for 5 minutes during active games, 1 hour for completed weeks
             has_active_scoring = any(score["points"] > 0 for score in matchup_scores)
-            ttl = 300 if has_active_scoring else 3600
+            ttl = MATCHUP_LIVE_TTL if has_active_scoring else MATCHUP_FINAL_TTL
             
-            self.cache.set(cache_key, result, CacheDataType.MATCHUP_DATA, ttl_override=ttl)
+            self.cache.set(cache_key, result, ttl)
             
             logger.info(f"Retrieved scores for {num_teams} teams in league {league_id}, week {week}")
             return result

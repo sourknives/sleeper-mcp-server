@@ -11,7 +11,7 @@ from typing import List, Optional
 
 from ..sleeper_client import SleeperClient, SleeperAPIError
 from ..models import League, User, Roster, ErrorResponse
-from ..cache import CacheManager, CacheDataType
+from ..cache import CacheManager, LEAGUE_LIST_TTL, LEAGUE_SETTINGS_TTL, ROSTER_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"user_leagues:{username}:{season}"
-            cached_result = self.cache.get(cache_key, CacheDataType.LEAGUE_SETTINGS)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -81,7 +81,7 @@ class LeagueTools:
             }
             
             # Cache the result for 1 hour
-            self.cache.set(cache_key, result, CacheDataType.LEAGUE_SETTINGS, ttl_override=3600)
+            self.cache.set(cache_key, result, LEAGUE_LIST_TTL)
             
             logger.info(f"Retrieved {len(leagues)} leagues for user {username}")
             return result
@@ -112,7 +112,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"league_info:{league_id}"
-            cached_result = self.cache.get(cache_key, CacheDataType.LEAGUE_SETTINGS)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -154,7 +154,7 @@ class LeagueTools:
             }
             
             # Cache the result for 24 hours (league settings rarely change)
-            self.cache.set(cache_key, result, CacheDataType.LEAGUE_SETTINGS)
+            self.cache.set(cache_key, result, LEAGUE_SETTINGS_TTL)
             
             logger.info(f"Retrieved league info for {league_id}")
             return result
@@ -185,7 +185,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"league_rosters_with_draft:{league_id}"
-            cached_result = self.cache.get(cache_key, CacheDataType.ROSTER_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -321,7 +321,7 @@ class LeagueTools:
             }
             
             # Cache the result for 15 minutes (rosters change frequently)
-            self.cache.set(cache_key, result, CacheDataType.ROSTER_DATA)
+            self.cache.set(cache_key, result, ROSTER_TTL)
             
             logger.info(f"Retrieved {len(rosters)} rosters with draft info for league {league_id}")
             return result
@@ -352,7 +352,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"league_rosters:{league_id}"
-            cached_result = self.cache.get(cache_key, CacheDataType.ROSTER_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -441,7 +441,7 @@ class LeagueTools:
             }
             
             # Cache the result for 15 minutes (rosters change frequently)
-            self.cache.set(cache_key, result, CacheDataType.ROSTER_DATA)
+            self.cache.set(cache_key, result, ROSTER_TTL)
             
             logger.info(f"Retrieved {len(rosters)} rosters for league {league_id}")
             return result
@@ -472,7 +472,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"league_users:{league_id}"
-            cached_result = self.cache.get(cache_key, CacheDataType.LEAGUE_SETTINGS)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -504,7 +504,7 @@ class LeagueTools:
             }
             
             # Cache the result for 1 hour (user list rarely changes mid-season)
-            self.cache.set(cache_key, result, CacheDataType.LEAGUE_SETTINGS, ttl_override=3600)
+            self.cache.set(cache_key, result, LEAGUE_LIST_TTL)
             
             logger.info(f"Retrieved {len(users)} users for league {league_id}")
             return result
@@ -535,7 +535,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"roster_user_mapping:{league_id}"
-            cached_result = self.cache.get(cache_key, CacheDataType.ROSTER_DATA)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -596,7 +596,7 @@ class LeagueTools:
             }
             
             # Cache the result for 15 minutes
-            self.cache.set(cache_key, result, CacheDataType.ROSTER_DATA, ttl_override=900)
+            self.cache.set(cache_key, result, ROSTER_TTL)
             
             logger.info(f"Retrieved roster-user mapping for {len(roster_mapping)} rosters in league {league_id}")
             return result
@@ -627,7 +627,7 @@ class LeagueTools:
         try:
             # Check cache first
             cache_key = f"league_draft:{league_id}"
-            cached_result = self.cache.get(cache_key, CacheDataType.LEAGUE_SETTINGS)
+            cached_result = self.cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
@@ -745,7 +745,7 @@ class LeagueTools:
             }
             
             # Cache the result for 24 hours (draft data doesn't change)
-            self.cache.set(cache_key, result, CacheDataType.LEAGUE_SETTINGS, ttl_override=86400)
+            self.cache.set(cache_key, result, LEAGUE_SETTINGS_TTL)
             
             logger.info(f"Retrieved draft data with {len(formatted_picks)} picks for league {league_id}")
             return result
