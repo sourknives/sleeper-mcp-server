@@ -60,9 +60,6 @@ Add the following configuration to your Claude Desktop MCP settings file:
     "sleeper": {
       "command": "python",
       "args": ["-m", "sleeper_mcp_server"],
-      "env": {
-        "LOG_LEVEL": "INFO"
-      },
       "disabled": false,
       "autoApprove": [
         "get_user_leagues",
@@ -76,19 +73,13 @@ Add the following configuration to your Claude Desktop MCP settings file:
 }
 ```
 
-**Advanced Configuration with Custom Settings:**
+**Auto-approving every tool:**
 ```json
 {
   "mcpServers": {
     "sleeper": {
       "command": "python",
       "args": ["-m", "sleeper_mcp_server"],
-      "env": {
-        "SLEEPER_API_BASE_URL": "https://api.sleeper.app/v1",
-        "CACHE_TTL_SECONDS": "3600",
-        "LOG_LEVEL": "INFO",
-        "MAX_RETRIES": "3"
-      },
       "disabled": false,
       "autoApprove": [
         "get_user_leagues",
@@ -109,15 +100,6 @@ Add the following configuration to your Claude Desktop MCP settings file:
   }
 }
 ```
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SLEEPER_API_BASE_URL` | Sleeper API endpoint | `https://api.sleeper.app/v1` |
-| `CACHE_TTL_SECONDS` | Default cache TTL in seconds | `3600` |
-| `LOG_LEVEL` | Logging verbosity (DEBUG, INFO, WARNING, ERROR) | `INFO` |
-| `MAX_RETRIES` | Maximum API retry attempts | `3` |
 
 ## Available MCP Tools
 
@@ -426,42 +408,27 @@ Different data types have optimized cache TTL values:
 
 **Solutions:**
 - Restart the MCP server to clear cache
-- Adjust `CACHE_TTL_SECONDS` environment variable
+- Adjust the TTL constants in `sleeper_mcp_server/cache.py`
 - Check system memory availability
 
 #### 5. Configuration Problems
 
 **Symptoms:**
 - Tools not appearing in Claude Desktop
-- Environment variables not working
 
 **Solutions:**
 - Validate JSON syntax in Claude Desktop config
 - Restart Claude Desktop after configuration changes
 - Check file permissions on config file
-- Verify environment variable names and values
 
-### Debug Mode
+### Logging
 
-Enable debug logging for detailed troubleshooting:
-
-```json
-{
-  "mcpServers": {
-    "sleeper": {
-      "command": "python",
-      "args": ["-m", "sleeper_mcp_server"],
-      "env": {
-        "LOG_LEVEL": "DEBUG"
-      }
-    }
-  }
-}
-```
+The server logs to stderr at `INFO`. The level is set in `sleeper_mcp_server/__main__.py`;
+there is no environment-variable override.
 
 ### Getting Help
 
-1. **Check Logs**: Enable DEBUG logging to see detailed error information
+1. **Check Logs**: Read the server's stderr output for detailed error information
 2. **Verify Configuration**: Ensure Claude Desktop MCP configuration is correct
 3. **Test API Access**: Verify you can access Sleeper API directly
 4. **Update Dependencies**: Ensure all packages are up to date
